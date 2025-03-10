@@ -218,18 +218,18 @@ const TransformParticles = ({ visible }: { visible: boolean }) => {
 };
 
 // 装饰性心形
-const HeartDecoration = ({ visible }: { visible: boolean }) => {
+const HeartDecoration = React.memo(({ visible }: { visible: boolean }) => {
   if (!visible) return null;
   
   return (
     <div className="absolute inset-0 pointer-events-none overflow-visible">
-      {Array.from({ length: 5 }).map((_, i) => {
-        const delay = 0.2 + i * 0.1;
-        const offsetX = (Math.random() - 0.5) * 160;
-        const offsetY = -100 - Math.random() * 50;
-        const size = Math.random() * 18 + 8;
-        const opacity = Math.random() * 0.4 + 0.2;
-        const duration = 1.2 + Math.random() * 0.5;
+      {Array.from({ length: 8 }).map((_, i) => {
+        const delay = 0.1 + i * 0.08;
+        const offsetX = (Math.random() - 0.5) * 180;
+        const offsetY = -120 - Math.random() * 60;
+        const size = Math.random() * 22 + 10;
+        const opacity = Math.random() * 0.6 + 0.3;
+        const duration = 1.8 + Math.random() * 0.7;
         
         return (
           <motion.div
@@ -264,7 +264,8 @@ const HeartDecoration = ({ visible }: { visible: boolean }) => {
       })}
     </div>
   );
-};
+});
+HeartDecoration.displayName = 'HeartDecoration';
 
 interface VoiceButtonProps {
   size?: 'sm' | 'md' | 'lg'
@@ -313,15 +314,19 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const { isRecording, isProcessing, startRecording, stopRecording, addMessage } = useVoiceChat()
   const controls = useAnimation()
   const [bubblesCycle, setBubblesCycle] = useState(0)
-  const [isTextMode, setIsTextMode] = useState(false)
+  const [waveCycle, setWaveCycle] = useState(0)
   const [text, setText] = useState('')
-  const [longPressActive, setLongPressActive] = useState(false)
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
-  const longPressDuration = 500 // 长按阈值，单位毫秒
+  const [isTextMode, setIsTextMode] = useState(false)
   const [textBoxExpanded, setTextBoxExpanded] = useState(false)
+  const [isLongPressing, setIsLongPressing] = useState(false)
+  const [showFloatingBubbles, setShowFloatingBubbles] = useState(false)
+  const [showSparkles, setShowSparkles] = useState(false)
   const [showTransformParticles, setShowTransformParticles] = useState(false)
   const [showHeartDecoration, setShowHeartDecoration] = useState(false)
   const [isChatIconVisible, setIsChatIconVisible] = useState(true)
+  const lastMessageSentTimeRef = useRef<number>(0)
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+  const longPressDuration = 500 // 长按阈值，单位毫秒
 
   // 注入全局样式
   useEffect(() => {
@@ -363,15 +368,19 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const { width: windowWidth } = useWindowSize();
   const isDesktop = windowWidth >= 768; // 桌面设备的断点
   
-  // 点击处理
+  // 处理按钮点击
   const handleClick = useCallback(() => {
     if (isRecording) {
+      // 停止录音
       stopRecording()
+      // 模拟一个用户消息
+      const userText = "这是一条测试语音消息..." // 实际应用中应当是语音识别的结果
       
-      // 模拟处理语音结果
+      // 模拟延迟，实际应用中可能是语音识别过程
       setTimeout(() => {
-        // 添加用户消息
-        const userText = "这是一条语音消息示例"
+        // 记录当前消息发送时间
+        lastMessageSentTimeRef.current = Date.now()
+        
         addMessage(userText, true)
         
         // 回调函数
@@ -392,12 +401,12 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const handleMouseDown = useCallback(() => {
     if (textBoxExpanded) return; // 如果文本框已展开，不执行长按逻辑
     
-    setLongPressActive(true);
+    setIsLongPressing(true);
     
     longPressTimer.current = setTimeout(() => {
       // 长按时间达到阈值，切换到文本模式
       setIsTextMode(true);
-      setLongPressActive(false);
+      setIsLongPressing(false);
     }, longPressDuration);
   }, [textBoxExpanded]);
   
@@ -410,13 +419,13 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
       longPressTimer.current = null;
     }
     
-    if (longPressActive && !isTextMode) {
+    if (isLongPressing && !isTextMode) {
       // 如果不是长按且不是文本模式，执行普通点击操作
       handleClick();
     }
     
-    setLongPressActive(false);
-  }, [longPressActive, isTextMode, handleClick, textBoxExpanded]);
+    setIsLongPressing(false);
+  }, [isLongPressing, isTextMode, handleClick, textBoxExpanded]);
   
   // 处理鼠标离开 - 清除长按计时器
   const handleMouseLeave = useCallback((e: React.MouseEvent) => {
@@ -435,32 +444,45 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
-    setLongPressActive(false);
+    setIsLongPressing(false);
   }, []);
   
-  // 发送文本消息
+  // 处理发送文本消息
   const handleSendText = useCallback(() => {
-    if (text.trim()) {
-      addMessage(text, true)
-      setText('')
-      
-      // 触发心形装饰动画
-      setShowHeartDecoration(true)
-      setTimeout(() => {
-        setShowHeartDecoration(false)
-      }, 1500)
-      
-      // 模拟回复
-      setTimeout(() => {
-        addMessage("已收到你的文字消息！有什么我能帮你的呢？", false)
-      }, 1000)
-      
-      // 关闭文本模式
-      if (!textBoxExpanded) {
-        setIsTextMode(false)
-      }
+    if (!text.trim()) return
+    
+    // 记录当前消息发送时间
+    lastMessageSentTimeRef.current = Date.now()
+    
+    // 发送用户消息
+    addMessage(text, true)
+    setText('')
+    
+    // 触发心形装饰动画
+    setShowHeartDecoration(true)
+    
+    // 使用setTimeout进行爱心动画的隐藏
+    const heartTimer = setTimeout(() => {
+      setShowHeartDecoration(false)
+    }, 2500)
+    
+    // 模拟回复，保持setTimeout嵌套以确保顺序执行
+    const replyTimer = setTimeout(() => {
+      // 添加AI回复消息，不再引发爱心动画
+      addMessage("已收到你的文字消息！有什么我能帮你的呢？", false)
+    }, 1000)
+    
+    // 关闭文本模式
+    if (!textBoxExpanded) {
+      setIsTextMode(false)
     }
-  }, [text, addMessage, textBoxExpanded]);
+    
+    // 清理函数以避免内存泄漏
+    return () => {
+      clearTimeout(heartTimer)
+      clearTimeout(replyTimer)
+    }
+  }, [text, addMessage, textBoxExpanded])
   
   // 处理聊天图标点击 - 展开文本框
   const handleChatIconClick = useCallback((e: React.MouseEvent) => {
