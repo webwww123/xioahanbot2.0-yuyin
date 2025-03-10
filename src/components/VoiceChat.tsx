@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { VoiceChatProvider } from '@/lib/VoiceChatContext'
 import VoiceButton from './VoiceButton'
@@ -17,8 +17,8 @@ const VoiceChat: React.FC = () => {
         {/* 消息显示区域 */}
         <MessagesArea />
         
-        {/* 底部控制区域 - 往上移动 */}
-        <div className="fixed bottom-20 sm:bottom-28 md:bottom-32 left-0 right-0 h-32 flex flex-col items-center justify-center bg-gradient-to-t from-[#fffafa] to-transparent z-10 pb-6">
+        {/* 底部控制区域 */}
+        <div className="fixed bottom-20 sm:bottom-28 md:bottom-32 left-0 right-0 flex flex-col items-center justify-center bg-gradient-to-t from-[#fffafa] to-transparent z-10 pb-6">
           {/* 中央语音按钮 */}
           <motion.div
             className="relative"
@@ -34,7 +34,7 @@ const VoiceChat: React.FC = () => {
           </motion.div>
         </div>
         
-        {/* 底部品牌标识 - 更靠近按钮 */}
+        {/* 底部品牌标识 */}
         <motion.div
           className="fixed bottom-10 sm:bottom-14 md:bottom-16 left-0 right-0 text-center text-xs text-pink-dark/50 font-light z-10"
           initial={{ opacity: 0 }}
