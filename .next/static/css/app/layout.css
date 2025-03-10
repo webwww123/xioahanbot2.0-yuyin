@@ -702,6 +702,9 @@ video {
 .mb-8 {
   margin-bottom: 2rem;
 }
+.mt-4 {
+  margin-top: 1rem;
+}
 .flex {
   display: flex;
 }
@@ -774,14 +777,14 @@ video {
 .h-screen {
   height: 100vh;
 }
-.min-h-screen {
-  min-height: 100vh;
-}
 .min-h-\[40px\] {
   min-height: 40px;
 }
 .min-h-\[48px\] {
   min-height: 48px;
+}
+.min-h-screen {
+  min-height: 100vh;
 }
 .w-1 {
   width: 0.25rem;

@@ -10,15 +10,17 @@ import Decorations from './Decorations'
 const VoiceChat: React.FC = () => {
   return (
     <VoiceChatProvider>
-      <div className="relative flex flex-col items-center justify-between w-full h-full min-h-screen pt-4">
+      <div className="relative flex flex-col items-center justify-between w-full h-full min-h-screen">
         {/* 装饰元素 */}
         <Decorations />
         
         {/* 消息显示区域 */}
-        <MessagesArea />
+        <div className="flex-1 w-full overflow-y-auto">
+          <MessagesArea />
+        </div>
         
         {/* 底部控制区域 */}
-        <div className="fixed bottom-20 sm:bottom-28 md:bottom-32 left-0 right-0 flex flex-col items-center justify-center bg-gradient-to-t from-[#fffafa] to-transparent z-10 pb-6">
+        <div className="w-full py-6 flex flex-col items-center justify-center z-10">
           {/* 中央语音按钮 */}
           <motion.div
             className="relative"
@@ -32,17 +34,17 @@ const VoiceChat: React.FC = () => {
           >
             <VoiceButton />
           </motion.div>
+          
+          {/* 底部品牌标识 */}
+          <motion.div
+            className="mt-4 text-center text-xs text-pink-dark/50 font-light"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+          >
+            <p>✨ 语音聊天 ✨</p>
+          </motion.div>
         </div>
-        
-        {/* 底部品牌标识 */}
-        <motion.div
-          className="fixed bottom-10 sm:bottom-14 md:bottom-16 left-0 right-0 text-center text-xs text-pink-dark/50 font-light z-10"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-        >
-          <p>✨ 语音聊天 ✨</p>
-        </motion.div>
       </div>
     </VoiceChatProvider>
   )

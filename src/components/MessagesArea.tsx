@@ -20,7 +20,7 @@ const MessagesArea: React.FC = () => {
   }, [messages, prefersReducedMotion])
   
   return (
-    <div className="absolute top-0 left-0 right-0 bottom-52 sm:bottom-60 md:bottom-64 flex flex-col-reverse overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-pink-light scrollbar-track-transparent">
+    <div className="flex-1 w-full overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-pink-light scrollbar-track-transparent">
       <div ref={messagesEndRef} className="h-6" />
       
       <motion.div 
