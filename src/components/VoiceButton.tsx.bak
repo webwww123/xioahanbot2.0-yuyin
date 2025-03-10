@@ -172,7 +172,7 @@ const Sparkles = ({ visible }: { visible: boolean }) => {
 };
 
 // 转换粒子效果组件
-const TransformParticles = ({ visible }: { visible: boolean }) => {
+const TransformParticles = ({ visible, direction = 'to-text' }: { visible: boolean, direction?: 'to-text' | 'to-voice' }) => {
   if (!visible) return null;
   
   return (
@@ -183,21 +183,31 @@ const TransformParticles = ({ visible }: { visible: boolean }) => {
         const size = Math.random() * 6 + 4;
         const delay = Math.random() * 0.2;
         
+        // 根据方向设置动画初始值和结束值
+        const initialX = direction === 'to-text' ? 0 : Math.cos(angle) * distance;
+        const initialY = direction === 'to-text' ? 0 : Math.sin(angle) * distance;
+        const finalX = direction === 'to-text' ? Math.cos(angle) * distance : 0;
+        const finalY = direction === 'to-text' ? Math.sin(angle) * distance : 0;
+        const initialScale = direction === 'to-text' ? 0 : 1;
+        const finalScale = direction === 'to-text' ? 1 : 0;
+        const initialOpacity = direction === 'to-text' ? 1 : 0;
+        const finalOpacity = direction === 'to-text' ? 0 : 1;
+        
         return (
           <motion.div
             key={i}
             className="absolute w-1 h-1 bg-pink-300 rounded-full"
             initial={{ 
-              opacity: 1,
-              scale: 0,
-              x: 0, 
-              y: 0,
+              opacity: initialOpacity,
+              scale: initialScale,
+              x: initialX, 
+              y: initialY,
             }}
             animate={{ 
-              opacity: [1, 0],
-              scale: [0, 1],
-              x: Math.cos(angle) * distance, 
-              y: Math.sin(angle) * distance,
+              opacity: [initialOpacity, finalOpacity],
+              scale: [initialScale, finalScale],
+              x: finalX, 
+              y: finalY,
             }}
             transition={{ 
               duration: 0.7,
@@ -310,7 +320,6 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   size = 'lg',
   onText
 }) => {
-  // 添加一个ref来跟踪上次发送消息的时间
   const lastMessageSentTimeRef = useRef<number>(0)
   const { addMessage, isRecording, isProcessing, startRecording, stopRecording } = useVoiceChat()
   const controls = useAnimation()
@@ -332,7 +341,8 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const [showTransformParticles, setShowTransformParticles] = useState(false)
   const [showHeartDecoration, setShowHeartDecoration] = useState(false)
   const [isChatIconVisible, setIsChatIconVisible] = useState(true)
-  const [isClosing, setIsClosing] = useState(false) // 添加关闭动画状态
+  // 添加变换方向状态
+  const [transformDirection, setTransformDirection] = useState('to-text')
 
   // 注入全局样式
   useEffect(() => {
@@ -476,8 +486,11 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   // 处理聊天图标点击 - 展开文本框
   const handleChatIconClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止事件冒泡到按钮
+    
+    // 设置动画方向为"到文本"
+    setTransformDirection('to-text');
+    
     setTextBoxExpanded(true);
-    setIsClosing(false); // 确保关闭状态为false
     
     // 添加触发粒子效果的状态
     setShowTransformParticles(true);
@@ -488,35 +501,30 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
     }, 700);
   }, []);
   
-  // 关闭文本框 - 添加动画
-  const closeTextBox = useCallback((e?: React.MouseEvent) => {
-    // 防止事件冒泡
-    if (e) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
+  // 关闭文本框
+  const closeTextBox = useCallback(() => {
+    // 设置动画方向为"到语音"
+    setTransformDirection('to-voice');
     
-    console.log('关闭按钮被点击');
-    
-    // 防止重复点击
-    if (isClosing) return;
-    
-    // 设置为关闭中状态，但不立即隐藏组件
-    setIsClosing(true);
-    
-    // 触发粒子效果
+    // 添加触发粒子效果的状态
     setShowTransformParticles(true);
-    setTimeout(() => {
-      setShowTransformParticles(false);
-    }, 700);
     
-    // 延迟关闭，等待动画完成
+    // 添加一些视觉反馈
+    setShowSparkles(true);
+    setTimeout(() => {
+      setShowSparkles(false);
+    }, 300);
+    
+    // 延迟设置文本框状态，以便完成动画
     setTimeout(() => {
       setTextBoxExpanded(false);
       setText('');
-      setIsClosing(false);
-    }, 600); // 等待动画完成
-  }, [isClosing]);
+      // 自动隐藏粒子效果
+      setTimeout(() => {
+        setShowTransformParticles(false);
+      }, 200);
+    }, 400); // 给动画足够的时间来展示
+  }, []);
   
   // 处理键盘事件
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -609,236 +617,112 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
         <Sparkles visible={isRecording} />
         
         {/* 转换粒子效果 */}
-        <TransformParticles visible={showTransformParticles} />
+        <TransformParticles 
+          visible={showTransformParticles} 
+          direction={transformDirection as 'to-text' | 'to-voice'} 
+        />
         
         {/* 心形装饰 */}
         <HeartDecoration visible={showHeartDecoration} />
         
-        {textBoxExpanded ? (
-          // 展开后的文本输入框
-          <motion.div
-            initial={{ 
-              width: size === 'lg' ? 96 : size === 'md' ? 80 : 56, 
-              height: size === 'lg' ? 96 : size === 'md' ? 80 : 56,
-              borderRadius: '50%',
-              backgroundColor: '#FF69B4'
-            }}
-            animate={{ 
-              width: isClosing 
-                ? (size === 'lg' ? 96 : size === 'md' ? 80 : 56) // 关闭时恢复到初始大小
-                : (isDesktop ? 'clamp(380px, 40vw, 550px)' : 'clamp(300px, 85vw, 400px)'), // 正常展开尺寸
-              height: isClosing 
-                ? (size === 'lg' ? 96 : size === 'md' ? 80 : 56) // 关闭时恢复到初始高度
-                : (isDesktop ? '65px' : '60px'), // 正常展开高度
-              borderRadius: isClosing 
-                ? '50%' // 关闭时恢复到圆形
-                : (isDesktop ? '32px' : '30px'), // 正常展开边框
-              backgroundColor: isClosing 
-                ? '#FF69B4' // 关闭时恢复到粉色
-                : 'rgba(255, 255, 255, 0.9)', // 正常展开颜色
-              boxShadow: isClosing
-                ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                : '0px 8px 20px rgba(255, 105, 180, 0.35)',
-            }}
-            transition={{ 
-              duration: 0.6, 
-              ease: [0.19, 1, 0.22, 1] 
-            }}
-            className="relative overflow-hidden backdrop-blur-sm border-[1.5px] border-pink-200 z-30"
-          >
-            {/* 背景装饰 */}
+        <AnimatePresence mode="wait">
+          {textBoxExpanded ? (
+            // 展开后的文本输入框
             <motion.div
-              className="absolute inset-0 pointer-events-none"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: isClosing ? 0 : 1 }}
-              transition={{ delay: isClosing ? 0 : 0.2, duration: 0.4 }}
+              key="text-input-box"
+              initial={{ 
+                width: size === 'lg' ? 96 : size === 'md' ? 80 : 56, 
+                height: size === 'lg' ? 96 : size === 'md' ? 80 : 56,
+                borderRadius: '50%',
+                backgroundColor: '#FF69B4'
+              }}
+              animate={{ 
+                width: isDesktop ? 'clamp(380px, 40vw, 550px)' : 'clamp(300px, 85vw, 400px)', // 根据设备响应
+                height: isDesktop ? '65px' : '60px',
+                borderRadius: isDesktop ? '32px' : '30px',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                boxShadow: '0px 8px 20px rgba(255, 105, 180, 0.35)',
+              }}
+              exit={{
+                width: size === 'lg' ? 96 : size === 'md' ? 80 : 56, 
+                height: size === 'lg' ? 96 : size === 'md' ? 80 : 56,
+                borderRadius: '50%',
+                backgroundColor: '#FF69B4',
+              }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 260, 
+                damping: 25,
+                duration: 0.4,
+              }}
+              className="flex items-center overflow-hidden shadow-xl px-3"
             >
-              <div className="absolute -top-10 -right-10 w-20 h-20 rounded-full bg-gradient-to-br from-pink-200 to-pink-100 opacity-30 blur-xl" />
-              <div className="absolute -bottom-2 -left-6 w-16 h-16 rounded-full bg-gradient-to-tr from-pink-300 to-pink-100 opacity-20 blur-xl" />
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: isClosing ? 0 : 1 }}
-              transition={{ delay: isClosing ? 0 : 0.3, duration: 0.3 }}
-              className={`flex h-full items-center ${isDesktop ? 'px-5 gap-3' : 'px-4 gap-2'}`}
-              onClick={(e) => e.stopPropagation()} // 阻止事件冒泡
-            >
-              {/* 左侧输入指示图标 */}
-              <motion.div
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: isClosing ? 0 : 1, opacity: isClosing ? 0 : 0.7 }}
-                transition={{ 
-                  delay: isClosing ? 0 : 0.25, 
-                  duration: 0.3, 
-                  ease: "easeOut" 
-                }}
-                className={`text-pink-400 ${isDesktop ? 'w-6 h-6' : 'w-5 h-5'}`}
-              >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="currentColor" 
-                  className="w-full h-full"
-                >
-                  <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z" />
-                  <path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z" />
-                </svg>
-              </motion.div>
+              <input
+                className="flex-grow bg-transparent focus:outline-none text-gray-700"
+                placeholder="请输入文字..."
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                autoFocus
+              />
               
-              {/* 输入框 */}
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: isClosing ? 0.9 : 1, opacity: isClosing ? 0 : 1 }}
-                transition={{ 
-                  delay: isClosing ? 0 : 0.35, 
-                  duration: isClosing ? 0.3 : 0.4, 
-                  ease: "easeOut" 
-                }}
-                className="flex-1 relative"
-              >
-                <textarea
-                  className={`w-full bg-transparent resize-none focus:outline-none scrollbar-hide text-gray-700 ${isDesktop ? 'py-3 px-2 text-base' : 'py-[10px] px-2 text-sm'}`}
-                  placeholder="输入消息..."
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoFocus
-                  rows={1}
-                  style={{
-                    height: 'auto',
-                    minHeight: isDesktop ? '40px' : '36px',
-                    maxHeight: isDesktop ? '112px' : '96px',
-                  }}
-                />
-                
-                {/* 输入框底部装饰线 */}
-                <motion.div 
-                  className={`absolute -bottom-1 left-0 right-0 bg-gradient-to-r from-transparent via-pink-300 to-transparent ${isDesktop ? 'h-[3px]' : 'h-[2px]'}`}
-                  initial={{ scaleX: 0, opacity: 0 }}
-                  animate={{ scaleX: 1, opacity: 0.5 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                />
-              </motion.div>
-              
-              {/* 按钮组 */}
-              <motion.div 
-                className={`flex ${isDesktop ? 'gap-2' : 'gap-1'}`}
-                initial={{ opacity: 1 }}
-                animate={{ opacity: isClosing ? 0 : 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <motion.button 
-                  className={`text-white bg-gradient-to-r from-pink-400 to-pink-500 rounded-full hover:shadow-md ${isDesktop ? 'p-3' : 'p-[10px]'}`}
-                  disabled={!text.trim()}
+              <div className="flex space-x-1">
+                <motion.button
                   onClick={handleSendText}
-                  initial={{ scale: 0, rotate: -45 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.4, type: 'spring', stiffness: 400, damping: 15 }}
-                  whileHover={{ scale: 1.1, filter: 'brightness(1.1)' }}
+                  disabled={!text.trim()}
+                  className={`p-2 rounded-full text-white ${!text.trim() ? 'bg-pink-200' : 'bg-pink-500'}`}
                   whileTap={{ scale: 0.9 }}
-                  style={{ opacity: text.trim() ? 1 : 0.5 }}
                 >
                   <SendIcon size={isDesktop ? 'large' : 'default'} />
                 </motion.button>
-                <motion.button 
-                  className={`text-pink-500 bg-pink-100 rounded-full hover:bg-pink-200 z-50 ${isDesktop ? 'p-3 min-w-[48px] min-h-[48px]' : 'p-[10px] min-w-[40px] min-h-[40px]'}`}
-                  onClick={function(e) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    console.log('关闭按钮被点击');
-                    
-                    // 防止重复点击
-                    if (isClosing) return;
-                    
-                    // 设置为关闭中状态，但不立即隐藏组件
-                    setIsClosing(true);
-                    
-                    // 触发粒子效果
-                    setShowTransformParticles(true);
-                    setTimeout(() => {
-                      setShowTransformParticles(false);
-                    }, 700);
-                    
-                    // 延迟关闭，等待动画完成
-                    setTimeout(() => {
-                      setTextBoxExpanded(false);
-                      setText('');
-                      setIsClosing(false);
-                    }, 600);
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()} 
-                  onTouchStart={(e) => e.stopPropagation()}
-                  initial={{ scale: 0, rotate: 45 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.5, type: 'spring', stiffness: 400, damping: 15 }}
-                  whileHover={{ scale: 1.1 }}
+                
+                <motion.button
+                  onClick={closeTextBox}
+                  className="p-2 rounded-full bg-gray-100 text-gray-500"
                   whileTap={{ scale: 0.9 }}
                 >
                   <CloseIcon size={isDesktop ? 'large' : 'default'} />
                 </motion.button>
-              </motion.div>
+              </div>
             </motion.div>
-            
-            {/* 装饰小点 */}
-            <motion.div 
-              className="absolute top-[10px] left-[15px] w-[4px] h-[4px] rounded-full bg-pink-300"
-              initial={{ scale: 0 }}
-              animate={{ scale: isClosing ? 0 : 1 }}
-              transition={{ delay: isClosing ? 0 : 0.7, duration: 0.3 }}
-            />
-            <motion.div 
-              className="absolute bottom-[10px] right-[15px] w-[4px] h-[4px] rounded-full bg-pink-300"
-              initial={{ scale: 0 }}
-              animate={{ scale: isClosing ? 0 : 1 }}
-              transition={{ delay: isClosing ? 0 : 0.8, duration: 0.3 }}
-            />
-            
-            {/* 边缘闪光效果 */}
-            <motion.div 
-              className="absolute top-0 left-1/2 h-full w-[40%] bg-gradient-to-r from-transparent via-white to-transparent opacity-30"
-              initial={{ x: -200 }}
-              animate={{ x: isClosing ? -200 : 200 }}
-              transition={{ delay: isClosing ? 0 : 0.7, duration: 1.5, ease: "easeInOut" }}
-            />
-          </motion.div>
-        ) : (
-          // 默认语音按钮
-          <div className="relative">
+          ) : (
+            // 语音按钮
             <motion.button
-              className={`voice-button ${sizeMap[size]} text-white shadow-lg z-10 relative`}
+              key="voice-button"
+              className={`voice-button relative flex items-center justify-center ${sizeMap[size]} focus:outline-none`}
+              style={{ touchAction: 'none' }}
+              initial={false}
               animate={controls}
-              whileTap={{ scale: 0.95 }}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              onTouchStart={handleMouseDown}
-              onTouchEnd={handleMouseUp}
-              style={{
-                background: isRecording 
-                  ? 'linear-gradient(140deg, #FF69B4, #FF1493, #FF69B4)' 
-                  : 'linear-gradient(140deg, #FF9CC2, #FF69B4)',
-                backgroundSize: isRecording ? '200% 200%' : '100% 100%',
-                animation: isRecording ? 'gradient-shift 3s ease infinite' : 'none',
-              }}
+              onPointerDown={handleMouseDown}
+              onPointerUp={handleMouseUp}
+              onPointerLeave={handleMouseLeave}
+              onPointerCancel={handleMouseLeave}
+              onClick={handleClick}
+              onContextMenu={(e) => e.preventDefault()}
             >
+              <motion.div
+                className="absolute inset-0 bg-white/5 rounded-full"
+                style={{ backdropFilter: 'blur(4px)' }}
+              />
+              
               <motion.div 
-                className="relative"
-                animate={isRecording ? {
-                  scale: [1, 1.1, 1],
-                  opacity: [1, 0.8, 1],
-                } : {}}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  ease: "easeInOut"
+                className="flex items-center justify-center"
+                animate={{
+                  scale: isRecording ? [1, 1.05, 1] : 1,
+                  transition: {
+                    scale: {
+                      duration: 1.5,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }
+                  }
                 }}
               >
                 {isTextMode ? <KeyboardIcon /> : <MicrophoneIcon />}
               </motion.div>
             </motion.button>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
         
         {/* 聊天图标 - 完全独立渲染，不受按钮状态影响 */}
         {!textBoxExpanded && isChatIconVisible && (
@@ -878,17 +762,14 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
           >
             <div className="flex overflow-hidden rounded-full border-2 border-pink-light bg-white/90 backdrop-blur-sm shadow-lg">
               <textarea
-                className={`w-full bg-transparent resize-none focus:outline-none scrollbar-hide text-gray-700 ${isDesktop ? 'py-3 px-2 text-base' : 'py-[10px] px-2 text-sm'}`}
+                className="w-full bg-transparent resize-none focus:outline-none scrollbar-hide text-gray-700 placeholder-gray-400"
                 placeholder="输入消息..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                autoFocus
                 rows={1}
                 style={{
-                  height: 'auto',
-                  minHeight: isDesktop ? '40px' : '36px',
-                  maxHeight: isDesktop ? '112px' : '96px',
+                  height: Math.min(Math.max(text.split('\n').length, 1) * 24, 96),
                 }}
               />
               <button 
