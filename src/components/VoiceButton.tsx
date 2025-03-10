@@ -378,26 +378,12 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const handleClick = useCallback(() => {
     if (isRecording) {
       stopRecording()
-      
-      // 模拟处理语音结果
-      setTimeout(() => {
-        // 添加用户消息
-        const userText = "这是一条语音消息示例"
-        addMessage(userText, true)
-        
-        // 回调函数
-        if (onText) onText(userText)
-        
-        // 模拟AI回复
-        setTimeout(() => {
-          addMessage("收到你的语音消息啦！我能帮你什么呢？", false)
-        }, 1000)
-      }, 1000)
+      // 实际的语音处理已经移至VoiceChatContext中
     } else {
       startRecording()
       setBubblesCycle(prev => prev + 1)
     }
-  }, [isRecording, stopRecording, addMessage, onText, startRecording])
+  }, [isRecording, stopRecording, startRecording])
   
   // 处理鼠标按下 - 开始计时长按
   const handleMouseDown = useCallback(() => {
@@ -452,7 +438,19 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   // 发送文本消息
   const handleSendText = useCallback(() => {
     if (text.trim()) {
-      addMessage(text, true)
+      // 如果提供了onText回调，则使用它
+      if (onText) {
+        onText(text);
+      } else {
+        // 否则使用原来的处理方式
+        addMessage(text, true)
+        
+        // 模拟回复
+        setTimeout(() => {
+          addMessage("已收到你的文字消息！有什么我能帮你的呢？", false)
+        }, 1000)
+      }
+      
       setText('')
       
       // 触发心形装饰动画
@@ -461,17 +459,12 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
         setShowHeartDecoration(false)
       }, 2500)
       
-      // 模拟回复
-      setTimeout(() => {
-        addMessage("已收到你的文字消息！有什么我能帮你的呢？", false)
-      }, 1000)
-      
       // 关闭文本模式
       if (!textBoxExpanded) {
         setIsTextMode(false)
       }
     }
-  }, [text, addMessage, textBoxExpanded]);
+  }, [text, addMessage, textBoxExpanded, onText]);
   
   // 处理聊天图标点击 - 展开文本框
   const handleChatIconClick = useCallback((e: React.MouseEvent) => {

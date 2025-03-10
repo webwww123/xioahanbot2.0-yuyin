@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { memo } from 'react'
 import { motion } from 'framer-motion'
 import { type Message } from '@/lib/types'
 
@@ -18,15 +18,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <motion.div
       className={`message-bubble ${message.isUser ? 'self-end bg-pink-light' : 'self-start'}`}
-      layout
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
       transition={{ 
-        duration: 0.35, 
-        type: "spring", 
-        stiffness: 120, 
-        damping: 20 
+        duration: 0.25, 
+        ease: "easeOut"
       }}
+      layout
+      layoutId={`message-${message.id}`}
     >
       <p className="text-sm leading-tight md:text-base">{message.text}</p>
       
@@ -35,7 +34,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         className={`absolute ${message.isUser ? '-right-1' : '-left-1'} bottom-0 w-3 h-3 rounded-full bg-pink`}
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        transition={{ delay: 0.2, type: 'spring' }}
+        transition={{ delay: 0.1, duration: 0.2 }}
         style={{ opacity: 0.2 }}
       />
       
@@ -49,4 +48,4 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   )
 }
 
-export default MessageBubble 
+export default memo(MessageBubble) 

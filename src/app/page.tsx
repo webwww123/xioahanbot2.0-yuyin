@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
 import { motion } from 'framer-motion'
+import Link from 'next/link'
 
 // 动态导入VoiceChat组件以避免SSR问题
 const VoiceChat = dynamic(() => import('@/components/VoiceChat'), {
@@ -49,6 +50,34 @@ const BackgroundBlurs = () => (
 export default function Home() {
   return (
     <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-white to-pink-light/30">
+      {/* 测试链接 */}
+      <div className="absolute top-4 left-4 z-50 flex gap-2">
+        <Link 
+          href="/api-test" 
+          className="px-3 py-1 bg-pink-500 text-white text-xs rounded-full shadow-md hover:bg-pink-600 transition-colors"
+        >
+          API测试
+        </Link>
+        <Link 
+          href="/test-gemini" 
+          className="px-3 py-1 bg-purple-500 text-white text-xs rounded-full shadow-md hover:bg-purple-600 transition-colors"
+        >
+          Gemini测试
+        </Link>
+        <Link 
+          href="/api-proxy-test" 
+          className="px-3 py-1 bg-blue-500 text-white text-xs rounded-full shadow-md hover:bg-blue-600 transition-colors"
+        >
+          代理测试
+        </Link>
+        <Link 
+          href="/deno-test" 
+          className="px-3 py-1 bg-green-500 text-white text-xs rounded-full shadow-md hover:bg-green-600 transition-colors"
+        >
+          Deno测试
+        </Link>
+      </div>
+      
       {/* 背景装饰 */}
       <BackgroundBlurs />
       
