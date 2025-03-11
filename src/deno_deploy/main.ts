@@ -1,13 +1,13 @@
 // 引入buffer模块
-import { Buffer } from "https://deno.land/std@0.190.0/node/buffer.ts";
+import { Buffer } from "node:buffer";
 
 // 处理CORS的函数
 const handleOPTIONS = async () => {
   return new Response(null, {
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "*",
-      "Access-Control-Allow-Headers": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
     }
   });
 };
@@ -26,6 +26,8 @@ class HttpError extends Error {
 const fixCors = ({ headers, status, statusText }: any) => {
   headers = new Headers(headers);
   headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   return { headers, status, statusText };
 };
 
@@ -33,7 +35,7 @@ const fixCors = ({ headers, status, statusText }: any) => {
 const BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
 const API_CLIENT = "genai-js/0.21.0"; // npm view @google/generative-ai version
-const DEFAULT_MODEL = "gemini-1.5-pro-latest";
+const DEFAULT_MODEL = "gemini-2.0-pro-exp-02-05";
 const DEFAULT_EMBEDDINGS_MODEL = "text-embedding-004";
 
 // 创建API请求头
@@ -45,75 +47,93 @@ const makeHeaders = (apiKey: string, more: any = {}) => ({
 
 // 处理模型列表请求
 async function handleModels(apiKey: string) {
-  const response = await fetch(`${BASE_URL}/${API_VERSION}/models`, {
-    headers: makeHeaders(apiKey),
-  });
-  
-  let { body } = response;
-  if (response.ok) {
+  try {
+    const url = `${BASE_URL}/${API_VERSION}/models`;
+    console.log(`请求模型列表: ${url}`);
+    
+    const response = await fetch(url, {
+      headers: makeHeaders(apiKey)
+    });
+    
+    if (!response.ok) {
+      throw new HttpError(await response.text(), response.status);
+    }
+    
     const data = await response.json();
     const { models } = data;
-    body = JSON.stringify({
+    const responseBody = JSON.stringify({
       object: "list",
       data: models.map(({ name }: any) => ({
         id: name.replace("models/", ""),
         object: "model",
         created: 0,
-        owned_by: "",
-      })),
-    }, null, "  ");
+        owned_by: ""
+      }))
+    });
     
-    return new Response(body, fixCors(response));
+    return new Response(responseBody, {
+      ...fixCors(response),
+      headers: {
+        ...fixCors(response).headers,
+        "Content-Type": "application/json"
+      }
+    });
+  } catch (error) {
+    console.error("获取模型列表失败:", error);
+    return createErrorResponse(error);
   }
-  
-  return new Response(await response.text(), fixCors(response));
 }
 
 // 处理嵌入向量请求
 async function handleEmbeddings(req: any, apiKey: string) {
-  if (typeof req.model !== "string") {
-    throw new HttpError("model is not specified", 400);
-  }
-  
-  if (!Array.isArray(req.input)) {
-    req.input = [req.input];
-  }
-  
-  let model;
-  if (req.model.startsWith("models/")) {
-    model = req.model;
-  } else {
-    req.model = DEFAULT_EMBEDDINGS_MODEL;
-    model = "models/" + req.model;
-  }
-  
-  const response = await fetch(`${BASE_URL}/${API_VERSION}/${model}:batchEmbedContents`, {
-    method: "POST",
-    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      "requests": req.input.map((text: string) => ({
-        model,
-        content: { parts: [{ text }] },
-        outputDimensionality: req.dimensions,
-      }))
-    })
-  });
-  
-  let { body } = response;
-  if (response.ok) {
+  try {
+    // 构建请求URL和参数
+    const model = req.model?.replace("text-embedding-ada-002", DEFAULT_EMBEDDINGS_MODEL) || DEFAULT_EMBEDDINGS_MODEL;
+    const url = `${BASE_URL}/${API_VERSION}/models/${model}:embedContent`;
+    
+    console.log(`处理嵌入请求: ${url}, 模型: ${model}`);
+    
+    // 转换请求体格式
+    const content = Array.isArray(req.input) ? req.input[0] : req.input;
+    const requestData = {
+      model: `models/${model}`,
+      content: { parts: [{ text: content }] },
+    };
+    
+    // 发送请求到Gemini API
+    const response = await fetch(url, {
+      method: "POST",
+      headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+      body: JSON.stringify(requestData),
+    });
+    
+    if (!response.ok) {
+      throw new HttpError(await response.text(), response.status);
+    }
+    
+    // 处理响应
     const { embeddings } = await response.json();
-    body = JSON.stringify({
+    const responseBody = JSON.stringify({
       object: "list",
       data: embeddings.map(({ values }: any, index: number) => ({
         object: "embedding",
-        index,
         embedding: values,
+        index
       })),
-      model: req.model,
-    }, null, "  ");
+      model,
+    });
+    
+    return new Response(responseBody, {
+      ...fixCors(response),
+      headers: {
+        ...fixCors(response).headers,
+        "Content-Type": "application/json"
+      }
+    });
+  } catch (error) {
+    console.error("处理嵌入向量请求失败:", error);
+    return createErrorResponse(error);
   }
-  
-  return new Response(body, fixCors(response));
 }
 
 // 处理聊天完成请求
@@ -155,13 +175,13 @@ async function handleCompletions(req: any, apiKey: string) {
   } else {
     // 非流式响应处理
     const data = await response.json();
-    body = processCompletionsResponse(data, model, id);
-    return new Response(JSON.stringify(body), {
+    const processedData = processCompletionsResponse(data, model, id);
+    return new Response(JSON.stringify(processedData), {
       ...fixCors(response),
       headers: {
         ...fixCors(response).headers,
-        "Content-Type": "application/json"
-      }
+        "Content-Type": "application/json",
+      },
     });
   }
 }
@@ -438,8 +458,52 @@ async function handleRequest(request: Request) {
   }
 }
 
-// 启动HTTP服务
-const port = parseInt(Deno.env.get("PORT") || "8000");
-console.log(`HTTP服务器在端口 ${port} 上运行...`);
+// 创建错误响应的辅助函数
+function createErrorResponse(error: any) {
+  const status = error instanceof HttpError ? error.status : 500;
+  const message = error instanceof Error ? error.message : String(error);
+  
+  return new Response(
+    JSON.stringify({
+      error: {
+        message,
+        type: error.name || "UnknownError",
+        code: status
+      }
+    }),
+    {
+      status,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
 
-Deno.serve({ port }, handleRequest); 
+// 仅在 Deno 环境中运行的部分
+try {
+  // 仅在 Deno 环境中使用的命名空间
+  interface DenoNamespace {
+    env: {
+      get(key: string): string | undefined;
+    };
+    serve(options: { port: number }, handler: (request: Request) => Promise<Response>): void;
+  }
+  
+  // 检查是否在 Deno 环境
+  const isDeno = typeof (globalThis as any).Deno !== 'undefined';
+  
+  if (isDeno) {
+    const Deno = (globalThis as any).Deno as DenoNamespace;
+    const port = parseInt(Deno.env.get("PORT") || "8000");
+    console.log(`HTTP服务器在端口 ${port} 上运行...`);
+    Deno.serve({ port }, handleRequest);
+  } else {
+    console.log("不在Deno环境中，跳过服务器启动");
+  }
+} catch (e) {
+  console.error("启动服务器时出错:", e);
+} 

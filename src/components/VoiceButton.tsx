@@ -310,8 +310,6 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   size = 'lg',
   onText
 }) => {
-  // 添加一个ref来跟踪上次发送消息的时间
-  const lastMessageSentTimeRef = useRef<number>(0)
   const { addMessage, isRecording, isProcessing, startRecording, stopRecording } = useVoiceChat()
   const controls = useAnimation()
   const [bubblesCycle, setBubblesCycle] = useState(0)
@@ -324,9 +322,6 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const [text, setText] = useState('')
   const [isTextMode, setIsTextMode] = useState(false)
   const [textBoxExpanded, setTextBoxExpanded] = useState(false)
-  const [isLongPressing, setIsLongPressing] = useState(false)
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
-  const longPressDuration = 500 // 长按阈值，单位毫秒
   const [showFloatingBubbles, setShowFloatingBubbles] = useState(false)
   const [showSparkles, setShowSparkles] = useState(false)
   const [showTransformParticles, setShowTransformParticles] = useState(false)
@@ -374,7 +369,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
   const { width: windowWidth } = useWindowSize();
   const isDesktop = windowWidth >= 768; // 桌面设备的断点
   
-  // 点击处理
+  // 处理点击 - 简化为只处理录音功能
   const handleClick = useCallback(() => {
     if (isRecording) {
       stopRecording()
@@ -385,37 +380,21 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
     }
   }, [isRecording, stopRecording, startRecording])
   
-  // 处理鼠标按下 - 开始计时长按
+  // 简化鼠标按下处理 - 移除长按逻辑
   const handleMouseDown = useCallback(() => {
-    if (textBoxExpanded) return; // 如果文本框已展开，不执行长按逻辑
-    
-    setIsLongPressing(true);
-    
-    longPressTimer.current = setTimeout(() => {
-      // 长按时间达到阈值，切换到文本模式
-      setIsTextMode(true);
-      setIsLongPressing(false);
-    }, longPressDuration);
+    // 只进行普通点击处理，无长按逻辑
+    if (textBoxExpanded) return; // 如果文本框已展开，不执行点击逻辑
   }, [textBoxExpanded]);
   
-  // 处理鼠标抬起 - 如果不是长按，则触发普通点击
+  // 简化鼠标抬起处理 - 只处理普通点击
   const handleMouseUp = useCallback(() => {
     if (textBoxExpanded) return; // 如果文本框已展开，不执行点击逻辑
     
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-    
-    if (isLongPressing && !isTextMode) {
-      // 如果不是长按且不是文本模式，执行普通点击操作
-      handleClick();
-    }
-    
-    setIsLongPressing(false);
-  }, [isLongPressing, isTextMode, handleClick, textBoxExpanded]);
+    // 执行普通点击操作
+    handleClick();
+  }, [handleClick, textBoxExpanded]);
   
-  // 处理鼠标离开 - 清除长按计时器
+  // 简化鼠标离开处理
   const handleMouseLeave = useCallback((e: React.MouseEvent) => {
     // 检查鼠标是否移到了聊天图标上
     // 获取事件的相关目标元素
@@ -427,12 +406,6 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
          relatedTarget.closest('.chat-icon-button'))) {
       return;
     }
-    
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-    setIsLongPressing(false);
   }, []);
   
   // 发送文本消息
@@ -442,13 +415,15 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
       if (onText) {
         onText(text);
       } else {
-        // 否则使用原来的处理方式
-        addMessage(text, true)
-        
-        // 模拟回复
-        setTimeout(() => {
-          addMessage("已收到你的文字消息！有什么我能帮你的呢？", false)
-        }, 1000)
+        // 否则使用原来的处理方式 - 仅在addMessage存在时调用
+        if (addMessage) {
+          addMessage(text, true)
+          
+          // 模拟回复
+          setTimeout(() => {
+            addMessage("已收到你的文字消息！有什么我能帮你的呢？", false)
+          }, 1000)
+        }
       }
       
       setText('')
@@ -736,30 +711,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
                 </motion.button>
                 <motion.button 
                   className={`text-pink-500 bg-pink-100 rounded-full hover:bg-pink-200 z-50 ${isDesktop ? 'p-3 min-w-[48px] min-h-[48px]' : 'p-[10px] min-w-[40px] min-h-[40px]'}`}
-                  onClick={function(e) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    console.log('关闭按钮被点击');
-                    
-                    // 防止重复点击
-                    if (isClosing) return;
-                    
-                    // 设置为关闭中状态，但不立即隐藏组件
-                    setIsClosing(true);
-                    
-                    // 触发粒子效果
-                    setShowTransformParticles(true);
-                    setTimeout(() => {
-                      setShowTransformParticles(false);
-                    }, 700);
-                    
-                    // 延迟关闭，等待动画完成
-                    setTimeout(() => {
-                      setTextBoxExpanded(false);
-                      setText('');
-                      setIsClosing(false);
-                    }, 600);
-                  }}
+                  onClick={(e) => closeTextBox(e)}
                   onMouseDown={(e) => e.stopPropagation()} 
                   onTouchStart={(e) => e.stopPropagation()}
                   initial={{ scale: 0, rotate: 45 }}
@@ -827,7 +779,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
                   ease: "easeInOut"
                 }}
               >
-                {isTextMode ? <KeyboardIcon /> : <MicrophoneIcon />}
+                <MicrophoneIcon />
               </motion.div>
             </motion.button>
           </div>
@@ -848,10 +800,6 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
               whileHover={{ scale: 1.1, backgroundColor: '#FF69B4' }}
               whileTap={{ scale: 0.9 }}
               initial={false}
-              animate={{ 
-                scale: 1, 
-                opacity: 1 
-              }}
             >
               <ChatIcon />
             </motion.button>
@@ -909,7 +857,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
         animate={{ opacity: textBoxExpanded ? 0 : 1 }}
         transition={{ duration: 0.5 }}
       >
-        {isRecording ? '正在录音...' : isProcessing ? '处理中...' : '长按打字'}
+        {isRecording ? '正在录音...' : isProcessing ? '处理中...' : '大黄出品'}
       </motion.div>
     </div>
   )

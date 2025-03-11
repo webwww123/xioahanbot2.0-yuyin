@@ -1,189 +1,151 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { GeminiClient, type ChatMessage } from '@/lib/deno-client'
+import { useState, useEffect, useCallback } from 'react'
 
 export default function DenoTest() {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput] = useState('')
-  const [apiUrl, setApiUrl] = useState('https://gemini-api-proxy.deno.dev/v1')
+  const [apiUrl, setApiUrl] = useState('https://pink-chat-api.deno.dev/v1')
   const [apiKey, setApiKey] = useState('AIzaSyBIDvwIlfUzhQPQQVwPWlAAVv75-E_oxuM')
-  const [isLoading, setIsLoading] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [client, setClient] = useState<GeminiClient | null>(null)
-  
-  // 初始化客户端
-  useEffect(() => {
-    if (apiUrl && apiKey) {
-      setClient(new GeminiClient(apiUrl, apiKey))
-    }
-  }, [apiUrl, apiKey])
-  
-  // 滚动到最新消息
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  const [message, setMessage] = useState('你好，这是一条测试消息，请用可爱的语气回复')
+  const [response, setResponse] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  // 发送消息到Deno部署的Gemini API
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!input.trim() || !client) return
-    
-    // 添加用户消息
-    const userMessage: ChatMessage = { role: 'user', content: input }
-    setMessages(prev => [...prev, userMessage])
-    setInput('')
-    setIsLoading(true)
+  const sendMessage = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    setResponse('')
     
     try {
-      // 创建历史消息数组
-      const historyMessages = [
-        {
-          role: 'system' as const,
-          content: '你是一个友好、有帮助的AI助手，会用简单的语言回答问题。'
+      console.log('发送请求到:', `${apiUrl}/chat/completions`)
+      
+      const res = await fetch(`${apiUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
         },
-        ...messages,
-        userMessage
-      ]
-      
-      console.log('发送请求到Deno部署的Gemini API:', historyMessages)
-      
-      // 使用客户端发送请求
-      const response = await client.chat(historyMessages, {
-        model: 'gemini-1.5-pro-latest',
-        temperature: 0.7,
-        max_tokens: 800
+        body: JSON.stringify({
+          model: 'gemini-2.0-pro-exp-02-0',
+          messages: [
+            { role: 'user', content: message }
+          ],
+          temperature: 0.7,
+          max_tokens: 800
+        })
       })
       
-      console.log('Deno部署的Gemini API响应:', response)
+      console.log('响应状态:', res.status)
       
-      // 提取回复文本
-      const replyText = response.choices[0]?.message?.content || '抱歉，无法生成回复'
-      
-      // 添加AI回复
-      const assistantMessage: ChatMessage = { role: 'assistant', content: replyText }
-      setMessages(prev => [...prev, assistantMessage])
-      
-    } catch (error) {
-      console.error('发送消息失败:', error)
-      
-      // 添加错误消息
-      const errorMessage: ChatMessage = { 
-        role: 'assistant', 
-        content: `发送消息失败: ${error instanceof Error ? error.message : String(error)}` 
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('API错误:', errorText)
+        throw new Error(`HTTP错误: ${res.status} - ${errorText}`)
       }
-      setMessages(prev => [...prev, errorMessage])
+      
+      const data = await res.json()
+      console.log('API响应:', data)
+      
+      if (data.choices && data.choices.length > 0) {
+        setResponse(data.choices[0].message.content)
+      } else {
+        throw new Error('响应中没有有效的回复内容')
+      }
+    } catch (err) {
+      console.error('请求错误:', err)
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }
+  }, [apiUrl, apiKey, message])
+
+  // 添加获取模型列表功能
+  const fetchModels = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    setResponse('')
+    
+    try {
+      const res = await fetch(`${apiUrl}/models?key=${apiKey}`)
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`HTTP错误: ${res.status} - ${errorText}`)
+      }
+      
+      const data = await res.json()
+      console.log('模型列表:', data)
+      setResponse(JSON.stringify(data, null, 2))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [apiUrl, apiKey])
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 p-4">
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-blue-500">Deno部署测试</h1>
-        <p className="text-gray-600">测试与Deno部署的Gemini API代理通信</p>
-      </div>
+    <div className="container mx-auto p-4 max-w-2xl">
+      <h1 className="text-2xl font-bold mb-6 text-pink-500">Deno API 测试页面</h1>
       
-      {/* 配置区域 */}
-      <div className="mb-4 space-y-2">
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">API URL</label>
         <input
           type="text"
           value={apiUrl}
           onChange={(e) => setApiUrl(e.target.value)}
-          placeholder="输入Deno部署的API URL..."
-          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="w-full p-2 border rounded focus:ring-pink-500 focus:border-pink-500"
         />
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">API Key</label>
         <input
           type="text"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
-          placeholder="输入Gemini API Key..."
-          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="w-full p-2 border rounded focus:ring-pink-500 focus:border-pink-500"
         />
       </div>
       
-      {/* 消息显示区域 */}
-      <div className="flex-1 overflow-y-auto mb-4 bg-white rounded-lg shadow-sm p-4">
-        {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-gray-400">
-            发送消息开始对话...
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {messages.map((msg, index) => (
-              <div 
-                key={index} 
-                className={`p-3 rounded-lg max-w-[80%] ${
-                  msg.role === 'user' 
-                    ? 'ml-auto bg-blue-100 text-blue-900' 
-                    : 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                {msg.content}
-              </div>
-            ))}
-            {isLoading && (
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-800 max-w-[80%]">
-                <div className="flex space-x-2">
-                  <motion.div 
-                    className="w-2 h-2 bg-gray-400 rounded-full"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
-                  />
-                  <motion.div 
-                    className="w-2 h-2 bg-gray-400 rounded-full"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
-                  />
-                  <motion.div 
-                    className="w-2 h-2 bg-gray-400 rounded-full"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}
-                  />
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">消息内容</label>
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          className="w-full p-2 border rounded focus:ring-pink-500 focus:border-pink-500 min-h-[100px]"
+        />
       </div>
       
-      {/* 输入区域 */}
-      <form onSubmit={sendMessage} className="flex space-x-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="输入消息..."
-          className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-          disabled={isLoading || !client}
-        />
+      <div className="flex space-x-2 mb-6">
         <button
-          type="submit"
-          className="bg-gradient-to-r from-blue-400 to-blue-600 text-white py-3 px-6 rounded-lg hover:opacity-90 disabled:opacity-50"
-          disabled={isLoading || !input.trim() || !client}
+          onClick={sendMessage}
+          disabled={loading}
+          className="px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 disabled:opacity-50"
         >
-          发送
+          {loading ? '发送中...' : '发送消息'}
         </button>
-      </form>
-      
-      {/* 部署指南链接 */}
-      <div className="mt-4 text-center">
-        <a 
-          href="/deno-deploy/README.md" 
-          target="_blank"
-          className="text-blue-500 hover:underline"
+        
+        <button
+          onClick={fetchModels}
+          disabled={loading}
+          className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
         >
-          查看Deno部署指南
-        </a>
+          {loading ? '获取中...' : '获取模型列表'}
+        </button>
       </div>
+      
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded">
+          <h3 className="font-bold">错误:</h3>
+          <pre className="whitespace-pre-wrap text-sm">{error}</pre>
+        </div>
+      )}
+      
+      {response && (
+        <div className="p-3 bg-gray-100 border rounded">
+          <h3 className="font-bold mb-2">响应:</h3>
+          <pre className="whitespace-pre-wrap text-sm">{response}</pre>
+        </div>
+      )}
     </div>
   )
 } 

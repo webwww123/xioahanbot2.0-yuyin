@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
 const API_CLIENT = "genai-js/0.21.0";
-const DEFAULT_MODEL = "gemini-1.5-pro-latest";
+const DEFAULT_MODEL = "gemini-2.0-pro-exp-02-05";
 
 // HTTP错误类
 class HttpError extends Error {

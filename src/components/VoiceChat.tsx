@@ -11,7 +11,7 @@ import PermissionGuide from './PermissionGuide'
 // 消息区域组件 - 单独提取以防止重渲染影响动画
 const MessageAreaContainer = memo(() => {
   return (
-    <div className="w-full h-[calc(100vh-40px)] overflow-hidden">
+    <div className="w-full h-[calc(100vh-220px)] mt-16 mb-8 overflow-hidden">
       <MessagesArea />
     </div>
   )
@@ -24,7 +24,7 @@ const ControlArea = memo(() => {
   const { sendTextMessage } = useVoiceChat();
   
   return (
-    <div className="w-full flex flex-col items-center justify-center z-10 -mt-[140px]">
+    <div className="w-full flex flex-col items-center justify-center z-10 -mt-[30px]">
       {/* 中央语音按钮 */}
       <motion.div
         className="relative mb-2"
@@ -50,8 +50,8 @@ const PermissionGuideContainer = memo(() => {
   
   return (
     <PermissionGuide 
-      isVisible={showPermissionGuide}
-      onClose={closePermissionGuide} 
+      isVisible={showPermissionGuide || false}
+      onClose={closePermissionGuide || (() => {})} 
     />
   )
 })
@@ -62,7 +62,7 @@ PermissionGuideContainer.displayName = 'PermissionGuideContainer'
 const VoiceChatContent: React.FC = () => {
   return (
     <div className="relative flex flex-col items-center w-full h-full min-h-screen overflow-hidden">
-      {/* API测试链接 */}
+      {/* API测试链接 - 暂时注释掉
       <div className="absolute top-4 right-4 z-50">
         <a 
           href="/api-test" 
@@ -71,6 +71,7 @@ const VoiceChatContent: React.FC = () => {
           API测试
         </a>
       </div>
+      */}
       
       {/* 装饰元素 */}
       <Decorations />

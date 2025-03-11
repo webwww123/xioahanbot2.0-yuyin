@@ -30,21 +30,24 @@ export type ChatCompletionResponse = {
 };
 
 /**
- * GeminiClient类 - 与Deno部署的Gemini API代理通信
+ * Gemini API 客户端类
+ * 可以通过远程 API 调用或本地代理调用
  */
 export class GeminiClient {
   private baseUrl: string;
   private apiKey: string;
+  private useLocalProxy: boolean;
   
   /**
-   * 创建GeminiClient实例
-   * @param {string} baseUrl - Deno部署的API基础URL，例如: "https://your-deno-deploy.deno.dev/v1"
-   * @param {string} apiKey - Gemini API密钥
+   * 创建 Gemini API 客户端实例
+   * @param baseUrl API 基础 URL
+   * @param apiKey API 密钥
+   * @param useLocalProxy 是否使用本地代理
    */
-  constructor(baseUrl: string, apiKey: string) {
-    // 确保baseUrl末尾没有斜杠
-    this.baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  constructor(baseUrl: string, apiKey: string, useLocalProxy: boolean = true) {
+    this.baseUrl = baseUrl;
     this.apiKey = apiKey;
+    this.useLocalProxy = useLocalProxy;
   }
   
   /**
@@ -61,33 +64,52 @@ export class GeminiClient {
       max_tokens?: number;
     } = {}
   ): Promise<ChatCompletionResponse> {
-    const url = `${this.baseUrl}/chat/completions`;
+    const model = options.model || 'gemini-2.0-pro-exp-02-05';
+    const temperature = options.temperature !== undefined ? options.temperature : 0.7;
+    const max_tokens = options.max_tokens || 800;
+
+    const payload = {
+      model,
+      messages,
+      temperature,
+      max_tokens,
+    };
+
+    let response;
     
-    try {
-      const response = await fetch(url, {
+    if (this.useLocalProxy) {
+      // 使用本地代理
+      console.log('使用本地代理发送请求到: /api/gemini-local/chat/completions');
+      
+      response = await fetch(`/api/gemini-local/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify({
-          model: options.model || 'gemini-1.5-pro-latest',
-          messages,
-          temperature: options.temperature || 0.7,
-          max_tokens: options.max_tokens || 800
-        })
+        body: JSON.stringify(payload),
       });
+    } else {
+      // 使用远程 API
+      console.log(`使用远程 API 发送请求到: ${this.baseUrl}/chat/completions`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API错误 (${response.status}): ${errorText}`);
-      }
-      
-      return await response.json() as ChatCompletionResponse;
-    } catch (error) {
-      console.error('与Gemini API通信失败:', error);
-      throw error;
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(payload),
+        mode: 'cors',
+        credentials: 'omit',
+      });
     }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API 请求失败 (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
   }
   
   /**
@@ -95,37 +117,55 @@ export class GeminiClient {
    * @returns {Promise<{object: string, data: Array<{id: string, object: string}>}>} 模型列表
    */
   async getModels() {
-    const url = `${this.baseUrl}/models`;
+    let response;
     
-    try {
-      const response = await fetch(url, {
+    if (this.useLocalProxy) {
+      // 使用本地代理
+      console.log('使用本地代理发送请求到: /api/gemini-local/models');
+      
+      response = await fetch(`/api/gemini-local/models`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`
-        }
+          'Content-Type': 'application/json',
+        },
       });
+    } else {
+      // 使用远程 API
+      console.log(`使用远程 API 发送请求到: ${this.baseUrl}/models`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API错误 (${response.status}): ${errorText}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('获取模型列表失败:', error);
-      throw error;
+      response = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        mode: 'cors',
+        credentials: 'omit',
+      });
     }
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`获取模型列表失败 (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
   }
 }
 
 /**
- * 创建GeminiClient实例的工厂函数
- * @param {string} url - Deno部署的API URL
- * @param {string} apiKey - Gemini API密钥
- * @returns {GeminiClient} GeminiClient实例
+ * 创建 Gemini API 客户端
+ * @param url API 基础 URL
+ * @param apiKey API 密钥
+ * @param useLocalProxy 是否使用本地代理
+ * @returns GeminiClient 实例
  */
-export function createGeminiClient(url: string, apiKey: string): GeminiClient {
-  return new GeminiClient(url, apiKey);
+export function createGeminiClient(
+  url: string = 'https://pink-chat-api.deno.dev/v1',
+  apiKey: string = 'AIzaSyBIDvwIlfUzhQPQQVwPWlAAVv75-E_oxuM',
+  useLocalProxy: boolean = true
+): GeminiClient {
+  return new GeminiClient(url, apiKey, useLocalProxy);
 }
 
 // 导出默认实例，可以使用默认URL和密钥

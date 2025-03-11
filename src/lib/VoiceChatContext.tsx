@@ -1,9 +1,16 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react'
-import { type Message, type VoiceChatContextType } from '@/lib/types'
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { Message, VoiceChatContextType } from '@/lib/types'
 import axios from 'axios'
 import crypto from 'crypto'
+import { v4 as uuidv4 } from 'uuid'
+
+// 消息类型扩展
+interface ChatMessage extends Message {
+  isLoading?: boolean;
+  isError?: boolean;
+}
 
 // 百度语音识别API配置
 const BAIDU_API_KEY = 'lTIvxWNpSHUuNBGD3tqfdiqC';
@@ -25,10 +32,24 @@ interface BaiduASRResponse {
 }
 
 // 创建上下文
-const VoiceChatContext = createContext<VoiceChatContextType | undefined>(undefined)
+const VoiceChatContext = createContext<VoiceChatContextType | null>(null)
+
+// 上下文提供者组件的属性类型
+interface VoiceChatProviderProps {
+  children: React.ReactNode;
+}
+
+// 使用上下文的钩子
+export const useVoiceChat = () => {
+  const context = useContext(VoiceChatContext)
+  if (!context) {
+    throw new Error('useVoiceChat must be used within a VoiceChatProvider')
+  }
+  return context
+}
 
 // 上下文提供者组件
-export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -93,19 +114,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // 添加新消息
-  const addMessage = useCallback((text: string, isUser: boolean) => {
-    const newMessage: Message = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      text,
-      isUser,
-      timestamp: Date.now(),
-    }
-    
-    setMessages((prev) => [...prev, newMessage])
-  }, [])
-
-  // 清空所有消息
+  // 清空消息
   const clearMessages = useCallback(() => {
     setMessages([])
   }, [])
@@ -114,6 +123,19 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const closePermissionGuide = useCallback(() => {
     setShowPermissionGuide(false)
   }, [])
+
+  // 添加新消息 (兼容旧格式)
+  const addMessage = useCallback((text: string, isUser: boolean) => {
+    const newMessage: Message = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      text,
+      isUser,
+      content: text,  // 同时使用新格式
+      role: isUser ? 'user' : 'assistant', // 同时使用新格式
+      timestamp: Date.now(),
+    };
+    setMessages(prev => [...prev, newMessage]);
+  }, []);
 
   // 开始录音
   const startRecording = useCallback(async () => {
@@ -521,112 +543,148 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [addMessage, generateDeviceId, getAccessToken, setMessages]);
 
-  // 发送文本消息到AI并获取响应
-  const sendTextMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isSubmitting) return
-    
-    // 添加用户消息
-    addMessage(text, true)
-    
-    // 清空输入框
-    setInputText('')
-    
-    // 设置提交状态
-    setIsSubmitting(true)
-    
+  // 发送文本消息
+  const sendTextMessage = async (text: string) => {
+    if (!text.trim()) return;
+
+    // 创建新的用户消息
+    const userMessage: Message = {
+      id: uuidv4(),
+      content: text,
+      role: 'user',
+      timestamp: Date.now(),
+    };
+
+    // 更新消息列表，添加用户消息
+    setMessages((prev) => [...prev, userMessage]);
+
+    // 创建临时的AI消息（显示加载状态）
+    const tempBotId = uuidv4();
+    const tempBotMessage: Message = {
+      id: tempBotId,
+      content: '正在思考...',
+      role: 'assistant',
+      timestamp: Date.now(),
+      isLoading: true,
+    };
+
+    // 更新消息列表，添加临时AI消息
+    setMessages((prev) => [...prev, tempBotMessage]);
+
     try {
-      // 发送请求到本地API路由
-      const response = await fetch('/api/gemini', {
+      console.log('发送消息:', text);
+      
+      // 准备发送到API的消息历史
+      const messagesToSend = messages
+        .filter(m => !m.isLoading) // 过滤掉加载中的消息
+        .concat(userMessage)  // 添加最新的用户消息
+        .map(m => ({
+          role: m.role || (m.isUser ? 'user' : 'assistant'),
+          content: m.content || m.text || ''
+        }));
+
+      console.log('准备发送的消息历史:', messagesToSend);
+      
+      // 构建请求体
+      const payload = {
+        model: 'gemini-2.0-pro-exp-02-05',
+        messages: messagesToSend,
+        temperature: 0.7,
+        max_tokens: 800,
+      };
+      
+      console.log('API请求体:', JSON.stringify(payload));
+      
+      // 使用本地 API 代理发送请求
+      const response = await fetch('/api/gemini-local/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: 'gemini-1.5-pro-latest',
-          messages: [
-            {
-              role: 'system',
-              content: '你是一个友好、有帮助的AI助手，会用简单的语言回答问题。'
-            },
-            // 获取最多最近的5条消息作为上下文
-            ...messages
-              .slice(-5)
-              .map(msg => ({
-                role: msg.isUser ? 'user' : 'assistant',
-                content: msg.text
-              })),
-            {
-              role: 'user',
-              content: text
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 800,
-        }),
-      })
+        body: JSON.stringify(payload),
+      });
       
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '请求失败')
+        const errorText = await response.text();
+        throw new Error(`API请求失败 (${response.status}): ${errorText}`);
       }
       
-      const data = await response.json()
+      const data = await response.json();
+      console.log('API响应:', data);
       
-      // 从响应中提取AI的回复
-      const aiResponse = data.choices[0]?.message?.content || '抱歉，我无法生成回复。'
+      // 从响应中提取AI回复
+      const botResponse = data.choices[0]?.message?.content || '抱歉，我无法生成回复。';
       
-      // 添加AI回复消息
-      addMessage(aiResponse, false)
+      // 更新AI消息 - 不再设置isLoading，但保留消息ID
+      setMessages(prev => 
+        prev.map(m => 
+          m.id === tempBotId 
+            ? {
+                ...m,
+                content: botResponse,
+                text: botResponse, // 同时更新旧格式属性，确保兼容性
+                isLoading: false,
+              }
+            : m
+        )
+      );
+      
     } catch (error) {
-      console.error('发送消息失败:', error)
-      addMessage(`发送消息失败: ${error instanceof Error ? error.message : String(error)}`, false)
-    } finally {
-      setIsSubmitting(false)
+      console.error('发送消息时出错:', error);
+      
+      // 更新AI消息为错误状态
+      setMessages(prev => 
+        prev.map(m => 
+          m.id === tempBotId 
+            ? {
+                ...m,
+                content: `抱歉，发生了错误: ${error instanceof Error ? error.message : '未知错误'}`,
+                text: `抱歉，发生了错误: ${error instanceof Error ? error.message : '未知错误'}`, // 同时更新旧格式属性
+                isLoading: false,
+                isError: true,
+              }
+            : m
+        )
+      );
     }
-  }, [addMessage, messages, isSubmitting])
+  };
 
   // 创建上下文值
-  const contextValue = useMemo(() => ({
-    messages,
-    isRecording,
-    isProcessing,
-    showPermissionGuide,
-    isSubmitting,
-    inputText,
-    setInputText,
-    addMessage,
-    clearMessages,
-    startRecording,
-    stopRecording,
-    closePermissionGuide,
-    sendTextMessage,
-  }), [
-    messages,
-    isRecording,
-    isProcessing,
-    showPermissionGuide,
-    isSubmitting,
-    inputText,
-    addMessage,
-    clearMessages,
-    startRecording,
-    stopRecording,
-    closePermissionGuide,
-    sendTextMessage
-  ])
+  const contextValue = useMemo<VoiceChatContextType>(
+    () => ({
+      messages,
+      isRecording,
+      isProcessing,
+      startRecording,
+      stopRecording,
+      addMessage,
+      clearMessages,
+      sendTextMessage,
+      isSubmitting,
+      inputText,
+      setInputText,
+      showPermissionGuide,
+      closePermissionGuide,
+    }),
+    [
+      messages,
+      isRecording,
+      isProcessing,
+      startRecording,
+      stopRecording,
+      addMessage,
+      clearMessages,
+      isSubmitting,
+      inputText,
+      setInputText,
+      showPermissionGuide,
+      closePermissionGuide,
+    ]
+  );
 
   return (
     <VoiceChatContext.Provider value={contextValue}>
       {children}
     </VoiceChatContext.Provider>
   )
-}
-
-// 创建自定义Hook以便组件使用上下文
-export const useVoiceChat = (): VoiceChatContextType => {
-  const context = useContext(VoiceChatContext)
-  if (context === undefined) {
-    throw new Error('useVoiceChat must be used within a VoiceChatProvider')
-  }
-  return context
 } 

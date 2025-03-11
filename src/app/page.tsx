@@ -50,7 +50,7 @@ const BackgroundBlurs = () => (
 export default function Home() {
   return (
     <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-white to-pink-light/30">
-      {/* 测试链接 */}
+      {/* 测试链接 - 暂时注释掉
       <div className="absolute top-4 left-4 z-50 flex gap-2">
         <Link 
           href="/api-test" 
@@ -77,12 +77,15 @@ export default function Home() {
           Deno测试
         </Link>
       </div>
+      */}
       
       {/* 背景装饰 */}
       <BackgroundBlurs />
       
       <Suspense fallback={<LoadingState />}>
-        <VoiceChat />
+        <div className="max-w-4xl mx-auto h-full">
+          <VoiceChat />
+        </div>
       </Suspense>
     </div>
   )
