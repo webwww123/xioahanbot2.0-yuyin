@@ -43,7 +43,7 @@ export function useMessageScroll({
   
   // 滚动到底部
   const scrollToBottom = useCallback((behavior: ScrollBehavior = defaultScrollBehavior) => {
-    if (containerRef.current && !userScrolled) {
+    if (containerRef.current && !userScrolled) {  // 只有在用户没有交互时才滚动
       const now = Date.now()
       requestAnimationFrame(() => {
         if (containerRef.current) {
@@ -61,7 +61,7 @@ export function useMessageScroll({
   
   // 强制滚动到底部
   const forceScrollToBottom = useCallback(() => {
-    if (containerRef.current && !userScrolled) {
+    if (containerRef.current && !userScrolled) {  // 同样遵循用户交互状态
       const scrollHeight = containerRef.current.scrollHeight
       const clientHeight = containerRef.current.clientHeight
       containerRef.current.scrollTop = scrollHeight - clientHeight
@@ -110,7 +110,7 @@ export function useMessageScroll({
     }
   }, [handleScroll])
   
-  // 新消息到达时自动滚动
+  // 新消息到达时的处理
   useEffect(() => {
     const hasNewMessages = messagesLength > lastMessagesLength
     
@@ -120,30 +120,33 @@ export function useMessageScroll({
         setUserScrolled(false)
         scrollToBottom()
       } 
-      // 如果用户没有交互过，或者正在底部，则滚动
-      else if (!userScrolled || isNearBottom()) {
-        scrollToBottom()
-      } 
-      // 否则显示新消息提示
-      else {
+      // 如果用户不在底部，显示新消息提示
+      else if (!isNearBottom()) {
         setShowNewMessageIndicator(true)
       }
       
       setLastMessagesLength(messagesLength)
     }
-  }, [messagesLength, lastMessagesLength, userScrolled, scrollToBottom, isNearBottom])
+  }, [messagesLength, lastMessagesLength, scrollToBottom, isNearBottom])
   
   // 窗口resize时检查滚动位置
   useEffect(() => {
     const handleResize = () => {
-      if (!userScrolled) {
-        scrollToBottom()
+      // 只在用户没有交互且在底部时才滚动
+      if (!userScrolled && isNearBottom()) {
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            const scrollHeight = containerRef.current.scrollHeight
+            const clientHeight = containerRef.current.clientHeight
+            containerRef.current.scrollTop = scrollHeight - clientHeight
+          }
+        })
       }
     }
     
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [userScrolled, scrollToBottom])
+  }, [userScrolled, isNearBottom])
   
   return {
     containerRef,

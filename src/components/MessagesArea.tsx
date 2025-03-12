@@ -120,31 +120,28 @@ const MessagesArea = () => {
   
   // 检查是否有正在流式输出的消息
   useEffect(() => {
-    // 最后一条消息是否是非用户消息
+    // 最后一条消息是否是非用户消息且不是加载状态
     const lastMessage = messages[messages.length - 1];
     const isLastMessageAI = lastMessage && 
                           !(lastMessage.isUser ?? lastMessage.role === 'user') &&
                           !lastMessage.isLoading;
                           
+    // 检查是否是新的AI消息开始
+    const isNewAIMessage = isLastMessageAI && 
+                          lastMessage.content && 
+                          lastMessage.content.length === 1; // 第一个字符开始时
+                          
     setHasStreamingMessage(isLastMessageAI);
     
-    // 如果有新的AI消息并且用户没有主动滚动，自动滚动到底部
-    if (isLastMessageAI && !userScrolled) {
-      // 使用更频繁的滚动，确保跟随打字效果
-      const scrollInterval = setInterval(() => {
-        if (!userScrolled) {
-          forceScrollToBottom(); // 使用强制滚动方法
-        } else {
-          clearInterval(scrollInterval);
+    // 只在新的AI消息开始时，且用户没有主动滚动，且在底部时，滚动一次到底部
+    if (isNewAIMessage && !userScrolled && isNearBottom()) {
+      requestAnimationFrame(() => {
+        if (containerRef.current && !userScrolled) {
+          scrollToBottom();
         }
-      }, 100);
-      
-      // 清理函数
-      return () => {
-        clearInterval(scrollInterval);
-      };
+      });
     }
-  }, [messages, userScrolled, forceScrollToBottom]);
+  }, [messages, userScrolled, scrollToBottom, isNearBottom, containerRef]);
   
   return (
     <div 
