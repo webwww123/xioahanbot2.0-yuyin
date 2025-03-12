@@ -41,38 +41,32 @@ export function useMessageScroll({
     return scrollHeight - scrollTop - clientHeight < bottomThreshold
   }, [bottomThreshold])
   
-  // 滚动到底部的函数 - 简化版本，避免过多的延迟处理
+  // 滚动到底部
   const scrollToBottom = useCallback((behavior: ScrollBehavior = defaultScrollBehavior) => {
-    if (containerRef.current) {
+    if (containerRef.current && !userScrolled) {
       const now = Date.now()
-      
-      // 使用requestAnimationFrame确保DOM已更新
       requestAnimationFrame(() => {
         if (containerRef.current) {
-          // 精确计算滚动位置
           const scrollHeight = containerRef.current.scrollHeight
           const clientHeight = containerRef.current.clientHeight
-          
           containerRef.current.scrollTo({
             top: scrollHeight - clientHeight,
             behavior: behavior
           })
-          
           lastScrollTimeRef.current = now
         }
       })
     }
-  }, [defaultScrollBehavior])
+  }, [defaultScrollBehavior, userScrolled])
   
-  // 强制立即滚动到底部，用于处理流式打字效果
+  // 强制滚动到底部
   const forceScrollToBottom = useCallback(() => {
-    if (containerRef.current) {
+    if (containerRef.current && !userScrolled) {
       const scrollHeight = containerRef.current.scrollHeight
       const clientHeight = containerRef.current.clientHeight
-      
       containerRef.current.scrollTop = scrollHeight - clientHeight
     }
-  }, [])
+  }, [userScrolled])
   
   // 处理滚动事件
   const handleScroll = useCallback(() => {
@@ -80,13 +74,13 @@ export function useMessageScroll({
     
     const { scrollTop } = containerRef.current
     
-    // 用户主动向上滚动的情况
-    if (scrollTop < lastScrollPosition && !isNearBottom()) {
+    // 用户主动滚动时
+    if (Math.abs(scrollTop - lastScrollPosition) > 10) {
       setUserScrolled(true)
     }
     
-    // 用户已经滚动到接近底部，重置userScrolled状态
-    if (isNearBottom()) {
+    // 只有当用户手动滚动到底部时才重置状态
+    if (isNearBottom() && Math.abs(scrollTop - lastScrollPosition) > 10) {
       setUserScrolled(false)
       setShowNewMessageIndicator(false)
     }
@@ -94,40 +88,52 @@ export function useMessageScroll({
     setLastScrollPosition(scrollTop)
   }, [lastScrollPosition, isNearBottom])
   
-  // 注册滚动事件监听器
+  // 处理用户交互
   useEffect(() => {
     const container = containerRef.current
-    if (container) {
-      container.addEventListener('scroll', handleScroll, { passive: true })
-      
-      // 初始化时设置滚动位置到底部
-      if (messagesLength > 0 && !userScrolled) {
-        scrollToBottom('auto')
-      }
-      
-      return () => container.removeEventListener('scroll', handleScroll)
+    if (!container) return
+    
+    const handleUserInteraction = () => {
+      setUserScrolled(true)
     }
-  }, [handleScroll, messagesLength, userScrolled, scrollToBottom])
+    
+    container.addEventListener('touchstart', handleUserInteraction, { passive: true })
+    container.addEventListener('mousedown', handleUserInteraction, { passive: true })
+    container.addEventListener('wheel', handleUserInteraction, { passive: true })
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    
+    return () => {
+      container.removeEventListener('touchstart', handleUserInteraction)
+      container.removeEventListener('mousedown', handleUserInteraction)
+      container.removeEventListener('wheel', handleUserInteraction)
+      container.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
   
   // 新消息到达时自动滚动
   useEffect(() => {
-    // 检查是否有新消息到达
     const hasNewMessages = messagesLength > lastMessagesLength
     
     if (hasNewMessages) {
-      // 如果用户没有主动滚动，或者是第一条消息，滚动到底部
-      if (!userScrolled || messagesLength === 1) {
+      // 如果是第一条消息，总是滚动
+      if (messagesLength === 1) {
+        setUserScrolled(false)
         scrollToBottom()
-      } else if (userScrolled) {
-        // 如果用户已滚动且有新消息，显示新消息提示
+      } 
+      // 如果用户没有交互过，或者正在底部，则滚动
+      else if (!userScrolled || isNearBottom()) {
+        scrollToBottom()
+      } 
+      // 否则显示新消息提示
+      else {
         setShowNewMessageIndicator(true)
       }
       
       setLastMessagesLength(messagesLength)
     }
-  }, [messagesLength, lastMessagesLength, userScrolled, scrollToBottom])
+  }, [messagesLength, lastMessagesLength, userScrolled, scrollToBottom, isNearBottom])
   
-  // 窗口resize时也重新检查滚动位置
+  // 窗口resize时检查滚动位置
   useEffect(() => {
     const handleResize = () => {
       if (!userScrolled) {
