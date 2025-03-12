@@ -29,20 +29,20 @@ const VoiceMessage: React.FC<{ url: string; duration: number }> = ({ url, durati
   
   return (
     <div 
-      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mt-1"
+      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors mt-1"
       onClick={handlePlay}
     >
       <FaVolumeUp className={classNames(
         "text-blue-500", 
         { "animate-voice-pulse": isPlaying }
       )} />
-      <div className="flex-1 h-2 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-gray-300 rounded-full overflow-hidden">
         <div className={classNames(
           "h-full bg-blue-500",
           { "voice-wave-effect": isPlaying }
         )} />
       </div>
-      <span className="text-xs text-gray-500 dark:text-gray-400 min-w-12 text-right">
+      <span className="text-xs text-gray-500 min-w-12 text-right">
         {formatTime(duration)}
       </span>
     </div>
@@ -86,7 +86,7 @@ export function MessageItem({ message }: MessageItemProps) {
           'flex gap-3 max-w-[85%] md:max-w-[75%] lg:max-w-[85%] p-3 rounded-lg',
           isUserMessage
             ? 'bg-primary text-white'
-            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100'
+            : 'bg-neutral-100 text-neutral-900'
         )}
       >
         <div className="flex-shrink-0 mt-1">
@@ -104,20 +104,20 @@ export function MessageItem({ message }: MessageItemProps) {
           {isLoading ? (
             <div className="space-y-3 py-2">
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
               </div>
             </div>
           ) : (
-            <div className="prose dark:prose-invert max-w-none text-sm sm:text-base overflow-hidden break-words">
+            <div className="prose max-w-none text-sm sm:text-base overflow-hidden break-words">
               {/* 判断是否为语音消息 */}
               {hasAudio ? (
                 <VoiceMessage url={message.audioUrl!} duration={message.audioDuration!} />
               ) : (message.content === '[语音消息]' || message.text === '[语音消息]') ? (
-                <div className="flex items-center gap-2 px-2 py-1 rounded bg-pink-100 dark:bg-pink-900">
+                <div className="flex items-center gap-2 px-2 py-1 rounded bg-pink-100">
                   <FaVolumeUp className="text-pink-500" />
-                  <span className="text-pink-700 dark:text-pink-300 text-sm">语音消息（无法播放）</span>
+                  <span className="text-pink-700 text-sm">语音消息（无法播放）</span>
                 </div>
               ) : (
                 <ReactMarkdown
