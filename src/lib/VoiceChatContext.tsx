@@ -469,12 +469,22 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         }
         
         // 准备发送到API的消息历史
-        const messagesToSend = messages
-          .filter(m => !m.isLoading) // 过滤掉加载中的消息
-          .map(m => ({
-            role: m.role || (m.isUser ? 'user' : 'assistant'),
-            content: m.content || m.text || ''
-          })) as BailianMessage[];
+        const messagesToSend = [
+          {
+            role: 'system',
+            content: '用户是一个可爱的小朋友，叫小憨宝宝。请用温柔可爱的语气和他对话。'
+          },
+          ...messages
+            .filter(m => !m.isLoading) // 过滤掉加载中的消息
+            .map(m => ({
+              role: m.role || (m.isUser ? 'user' : 'assistant'),
+              content: m.content || m.text || ''
+            })),
+          {
+            role: 'user',
+            content: '[语音消息]'
+          }
+        ] as BailianMessage[];
         
         // 添加带有音频的用户消息
         messagesToSend.push({
@@ -651,13 +661,22 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       console.log('发送消息:', text);
       
       // 准备发送到API的消息历史
-      const messagesToSend = messages
-        .filter(m => !m.isLoading) // 过滤掉加载中的消息
-        .concat(userMessage)  // 添加最新的用户消息
-        .map(m => ({
-          role: m.role || (m.isUser ? 'user' : 'assistant'),
-          content: m.content || m.text || ''
-        })) as BailianMessage[];
+      const messagesToSend = [
+        {
+          role: 'system',
+          content: '用户是一个可爱的小朋友，叫小憨宝宝。请用温柔可爱的语气和他对话。'
+        },
+        ...messages
+          .filter(m => !m.isLoading) // 过滤掉加载中的消息
+          .map(m => ({
+            role: m.role || (m.isUser ? 'user' : 'assistant'),
+            content: m.content || m.text || ''
+          })),
+        {
+          role: 'user',
+          content: text
+        }
+      ] as BailianMessage[];
 
       console.log('准备发送的消息历史:', messagesToSend);
       
