@@ -667,7 +667,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
               >
                 <textarea
                   className={`w-full bg-transparent resize-none focus:outline-none scrollbar-hide text-gray-700 ${isDesktop ? 'py-3 px-2 text-base' : 'py-[10px] px-2 text-sm'}`}
-                  placeholder="输入消息..."
+                  placeholder="憨大人请讲..."
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -677,6 +677,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
                     height: 'auto',
                     minHeight: isDesktop ? '40px' : '36px',
                     maxHeight: isDesktop ? '112px' : '96px',
+                    marginTop: '4px'  // 添加上边距
                   }}
                 />
                 
@@ -820,7 +821,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
             <div className="flex overflow-hidden rounded-full border-2 border-pink-light bg-white/90 backdrop-blur-sm shadow-lg">
               <textarea
                 className={`w-full bg-transparent resize-none focus:outline-none scrollbar-hide text-gray-700 ${isDesktop ? 'py-3 px-2 text-base' : 'py-[10px] px-2 text-sm'}`}
-                placeholder="输入消息..."
+                placeholder="憨大人请讲"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}

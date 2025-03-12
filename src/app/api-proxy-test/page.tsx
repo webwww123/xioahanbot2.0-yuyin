@@ -158,7 +158,7 @@ export default function ApiProxyTest() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="输入消息..."
+          placeholder="憨大人请讲"
           className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
           disabled={isLoading}
         />

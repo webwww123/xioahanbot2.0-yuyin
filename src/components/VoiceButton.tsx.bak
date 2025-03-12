@@ -763,7 +763,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
             <div className="flex overflow-hidden rounded-full border-2 border-pink-light bg-white/90 backdrop-blur-sm shadow-lg">
               <textarea
                 className="w-full bg-transparent resize-none focus:outline-none scrollbar-hide text-gray-700 placeholder-gray-400"
-                placeholder="输入消息..."
+                placeholder="憨大人请讲"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
