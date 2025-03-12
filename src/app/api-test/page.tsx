@@ -27,7 +27,7 @@ const ApiTest: React.FC = () => {
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [result, setResult] = useState<string>('')
-  const [error, setError] = useState<string>('')
+  const [error, setError] = useState<string | null>('')
   const [logs, setLogs] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [response, setResponse] = useState<any>(null)
