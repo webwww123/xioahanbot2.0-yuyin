@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "start": "deno run --allow-net --allow-read main.ts"
+    "start": "deno run --allow-net --allow-env main.ts",
+    "dev": "deno run --allow-net --allow-env --watch main.ts"
   },
   "deploy": {
     "project": "517cce8d-5ab2-4110-b9a4-2b6d2eb1e81a",
@@ -9,5 +10,9 @@
     ],
     "include": [],
     "entrypoint": "main.ts"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window", "dom"]
   }
 }

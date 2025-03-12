@@ -1,8 +1,8 @@
-# Gemini API 本地代理使用指南
+# 阿里云百炼 API 本地代理使用指南
 
 ## 问题背景
 
-在使用 Gemini API 时，可能会遇到 CORS (跨源资源共享) 问题，导致浏览器无法直接从前端应用访问远程 API。常见错误信息为 `Failed to fetch`。
+在使用阿里云百炼 API 时，可能会遇到 CORS (跨源资源共享) 问题，导致浏览器无法直接从前端应用访问远程 API。常见错误信息为 `Failed to fetch`。
 
 ## 解决方案
 
@@ -30,13 +30,13 @@ API 调试工具已经更新，添加了使用本地代理的选项：
 
 ```typescript
 // 直接使用 fetch API
-const response = await fetch('/api/gemini-local/chat/completions', {
+const response = await fetch('/api/bailian-local/chat/completions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    model: 'gemini-2.0-pro-exp-02-05',
+    model: 'qwen-omni-turbo-0119',
     messages: [
       { role: 'user', content: '你好，请用中文回复' }
     ],
@@ -45,30 +45,66 @@ const response = await fetch('/api/gemini-local/chat/completions', {
   }),
 });
 
-// 或者使用 deno-client.ts 中的 GeminiClient
-import { createGeminiClient } from '@/lib/deno-client';
+// 或者使用 OpenAI 兼容的客户端
+import OpenAI from 'openai';
 
-// 创建客户端时默认使用本地代理
-const client = createGeminiClient();
+// 创建客户端时使用本地代理
+const openai = new OpenAI({
+  baseURL: '/api/bailian-local', // 本地代理路径
+  apiKey: 'sk-not-needed', // 本地代理会自动添加真实的API密钥
+});
 
 // 发送聊天请求
-const response = await client.chat([
-  { role: 'user', content: '你好，请用中文回复' }
-]);
+const response = await openai.chat.completions.create({
+  model: 'qwen-omni-turbo-0119',
+  messages: [
+    { role: 'user', content: '你好，请用中文回复' }
+  ],
+  temperature: 0.7,
+  max_tokens: 800,
+});
 ```
 
-### 3. 可用的本地代理端点
+### 3. 多模态能力使用示例
+
+阿里云百炼API支持多模态输入（文本、图像、视频、音频），以下是一个多模态示例：
+
+```typescript
+const response = await openai.chat.completions.create({
+  model: 'qwen-omni-turbo-0119',
+  messages: [
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: '描述这张图片'
+        },
+        {
+          type: 'image',
+          image: 'https://example.com/image.jpg' // 图片URL
+        }
+      ]
+    }
+  ],
+  stream: true, // 流式输出
+  modalities: ['text'] // 输出模态
+});
+```
+
+### 4. 可用的本地代理端点
 
 以下是可用的本地代理端点：
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/api/gemini-local/models` | GET | 获取可用模型列表 |
-| `/api/gemini-local/chat/completions` | POST | 发送聊天请求 |
+| `/api/bailian-local/models` | GET | 获取可用模型列表 |
+| `/api/bailian-local/chat/completions` | POST | 发送聊天请求 |
+| `/api/bailian-local/embeddings` | POST | 获取文本嵌入向量 |
 
 ## 本地代理的实现
 
-本地代理的实现位于 `src/app/api/gemini-local/route.ts`，它使用 Next.js 的 API 路由功能，将请求转发到 Deno Deploy 服务。
+本地代理的实现位于 `src/app/api/bailian-local/route.ts`，它使用 Next.js 的 API 路由功能，将请求转发到 Deno Deploy 服务。
 
 如果您需要添加更多端点或自定义代理行为，可以修改该文件。
 

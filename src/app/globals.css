@@ -16,6 +16,12 @@
     font-family: 'Quicksand', sans-serif;
   }
   
+  /* 启用平滑滚动 */
+  html {
+    scroll-behavior: smooth;
+    height: 100%;
+  }
+  
   /* 自定义滚动条 */
   ::-webkit-scrollbar {
     width: 6px;
@@ -50,12 +56,15 @@
     max-width: 80%; /* 放宽消息气泡的最大宽度 */
     width: auto;
     height: auto;
-    transition: all 0.1s ease-out;
+    min-height: 2.5rem; /* 确保气泡有最小高度 */
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transform-origin: left bottom;
     backface-visibility: hidden;
     transform: translateZ(0);
     line-height: 1.5; /* 改善中文排版 */
     letter-spacing: 0.01em; /* 轻微调整字符间距 */
+    will-change: transform, opacity, height;
+    overflow: visible; /* 确保文字不被裁剪 */
   }
   
   .self-end .message-bubble {
@@ -73,17 +82,70 @@
   /* 打字光标动画 */
   .animate-blink {
     animation: blink 1s step-end infinite;
+    margin-left: 2px;
+    display: inline-block;
+    position: relative;
+    top: 2px;
+    height: 1em;
+    opacity: 0.8;
+  }
+  
+  /* 滚动容器 */
+  .messages-container {
+    @apply overflow-y-auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; /* 在iOS上启用惯性滚动 */
+    overscroll-behavior: contain; /* 防止滚动链接到父元素 */
+    scroll-padding-bottom: 8px; /* 增加底部边距 */
+    scroll-snap-type: y proximity; /* 启用滚动捕捉 */
+  }
+  
+  /* 最后一条消息的滚动捕捉 */
+  .messages-container > div:last-child {
+    scroll-snap-align: end;
+  }
+  
+  /* 顶部渐变消失效果 */
+  .top-fade-gradient {
+    background: linear-gradient(to bottom, var(--background) 0%, rgba(255, 250, 250, 0.8) 50%, transparent 100%);
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(2px);
+    will-change: opacity;
+  }
+  
+  /* 新消息提示按钮 */
+  .new-message-indicator {
+    @apply bg-pink text-white rounded-full px-4 py-2 shadow-lg;
+    animation: bounce-in 0.3s ease-out;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 15px rgba(255, 105, 180, 0.3);
+  }
+  
+  /* 流式打字效果增强 */
+  p.typing-effect {
+    transition-property: none; /* 禁用过渡动画，避免影响打字效果 */
+    min-height: 1.5em;
+    color: currentColor !important; /* 确保文字颜色显示正常 */
+    opacity: 1 !important; /* 强制文字显示 */
+    visibility: visible !important; /* 确保文字可见 */
+  }
+  
+  /* 确保光标始终可见 */
+  .animate-blink {
+    z-index: 2;
+    position: relative;
   }
 }
 
 @keyframes fadeIn {
   0% {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(15px) scale(0.95);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -94,7 +156,7 @@
   }
   100% {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-15px);
   }
 }
 
@@ -113,9 +175,65 @@
 /* 光标闪烁动画 */
 @keyframes blink {
   0%, 100% {
-    opacity: 1;
+    opacity: 0.8;
   }
   50% {
     opacity: 0;
   }
+}
+
+/* 消息提示弹出动画 */
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.8);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 语音条动画 */
+@keyframes voice-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.animate-voice-pulse {
+  animation: voice-pulse 1.5s ease-in-out infinite;
+}
+
+/* 改进语音条波浪效果 */
+@keyframes voice-wave-anim {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  50% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  51% {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
+.voice-wave-effect {
+  animation: voice-wave-anim 1.5s ease-in-out infinite;
+  width: 100%;
 } 

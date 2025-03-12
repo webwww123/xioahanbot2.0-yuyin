@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Message, VoiceChatContextType } from '@/lib/types'
-import axios from 'axios'
 import crypto from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -10,26 +9,20 @@ import { v4 as uuidv4 } from 'uuid'
 interface ChatMessage extends Message {
   isLoading?: boolean;
   isError?: boolean;
+  audioUrl?: string; // 增加音频URL属性
+  audioDuration?: number; // 增加音频时长属性
 }
 
-// 百度语音识别API配置
-const BAIDU_API_KEY = 'lTIvxWNpSHUuNBGD3tqfdiqC';
-const BAIDU_SECRET_KEY = 'hq5HnLN5ieAhGg0eBLFFuiUmz7NRpupz';
-
-// 百度API响应类型定义
-interface BaiduTokenResponse {
-  access_token: string;
-  expires_in: number;
-  [key: string]: any;
+// 百炼API消息格式
+interface BailianMessage {
+  role: string;
+  content: string | BailianContent[];
 }
 
-interface BaiduASRResponse {
-  err_no: number;
-  err_msg: string;
-  sn: string;
-  result?: string[];
-  [key: string]: any;
-}
+// 百炼API内容格式
+type BailianContent = 
+  | { type: 'text'; text: string }
+  | { type: 'input_audio'; input_audio: { data: string; format: string } };
 
 // 创建上下文
 const VoiceChatContext = createContext<VoiceChatContextType | null>(null)
@@ -56,11 +49,12 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
   const [showPermissionGuide, setShowPermissionGuide] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [inputText, setInputText] = useState('')
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null)
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null)
   
   // 添加录音相关的状态和引用
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
-  const accessTokenRef = useRef<string>('')
   const deviceIdRef = useRef<string>('')
   const permissionDeniedRef = useRef(false)
 
@@ -70,48 +64,6 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       deviceIdRef.current = crypto.randomBytes(16).toString('hex');
     }
     return deviceIdRef.current;
-  }, []);
-
-  // 获取百度API的Access Token
-  const getAccessToken = useCallback(async () => {
-    if (accessTokenRef.current) return accessTokenRef.current;
-    
-    try {
-      console.log('正在获取百度API访问令牌...');
-      
-      // 使用本地API路由
-      try {
-        const response = await axios.get<BaiduTokenResponse>('/api/baidu-token');
-        console.log('访问令牌请求成功:', response.status);
-        
-        // 检查响应是否包含access_token
-        if (!response.data || !response.data.access_token) {
-          console.error('API响应中没有access_token字段:', response.data);
-          throw new Error('获取访问令牌失败：响应中没有access_token');
-        }
-        
-        accessTokenRef.current = response.data.access_token;
-        console.log('成功获取访问令牌');
-        return accessTokenRef.current;
-      } catch (error) {
-        console.error('获取访问令牌HTTP请求失败:', error);
-        
-        // 获取更详细的错误信息
-        if (error && typeof error === 'object' && 'response' in error) {
-          const axiosError = error as any;
-          
-          if (axiosError.response) {
-            console.error('错误响应状态码:', axiosError.response.status);
-            console.error('错误响应数据:', axiosError.response.data);
-          }
-        }
-        
-        throw new Error(`获取access token失败: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    } catch (error) {
-      console.error('获取access token过程中出现错误:', error);
-      throw error;
-    }
   }, []);
 
   // 清空消息
@@ -125,7 +77,7 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
   }, [])
 
   // 添加新消息 (兼容旧格式)
-  const addMessage = useCallback((text: string, isUser: boolean) => {
+  const addMessage = useCallback((text: string, isUser: boolean, audioUrl?: string, audioDuration?: number) => {
     const newMessage: Message = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       text,
@@ -133,9 +85,67 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       content: text,  // 同时使用新格式
       role: isUser ? 'user' : 'assistant', // 同时使用新格式
       timestamp: Date.now(),
+      audioUrl,
+      audioDuration
     };
     setMessages(prev => [...prev, newMessage]);
   }, []);
+
+  // 播放音频
+  const playAudio = useCallback((url: string) => {
+    // 如果已经有正在播放的音频，先停止它
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+    
+    console.log('尝试播放音频:', url);
+    
+    // 创建新的音频元素
+    let audio: HTMLAudioElement;
+    
+    // 检查是否是Blob URL
+    if (url.startsWith('blob:')) {
+      // 尝试从全局存储获取Blob
+      if (window.audioBlobs && window.audioBlobs[url]) {
+        console.log('从全局存储中获取音频Blob');
+        const blob = window.audioBlobs[url];
+        // 为防止内存泄漏，创建一个新的URL
+        const newUrl = URL.createObjectURL(blob);
+        audio = new Audio(newUrl);
+        
+        // 播放完成后释放URL
+        audio.onended = () => {
+          URL.revokeObjectURL(newUrl);
+          setCurrentAudio(null);
+        };
+      } else {
+        console.log('直接使用Blob URL');
+        audio = new Audio(url);
+        audio.onended = () => setCurrentAudio(null);
+      }
+    } else {
+      // 处理常规URL
+      console.log('使用常规URL');
+      audio = new Audio(url);
+      audio.onended = () => setCurrentAudio(null);
+    }
+    
+    setCurrentAudio(audio);
+    
+    // 播放音频
+    audio.play().catch(err => {
+      console.error('播放音频失败:', err);
+      // 尝试其他方式播放
+      try {
+        const newAudio = document.createElement('audio');
+        newAudio.src = url;
+        newAudio.play().catch(e => console.error('二次尝试播放失败:', e));
+      } catch (e) {
+        console.error('创建备用音频元素失败:', e);
+      }
+    });
+  }, [currentAudio]);
 
   // 开始录音
   const startRecording = useCallback(async () => {
@@ -143,9 +153,6 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
     if (isRecording || isProcessing) return;
     
     try {
-      // 先获取访问令牌 (可以在后台静默执行)
-      getAccessToken().catch(e => console.error('获取token失败，但不影响录音:', e));
-      
       // 添加系统提示
       addMessage('正在准备录音...', false);
       
@@ -166,13 +173,26 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       
       // 查找支持的MIME类型
       let mimeType = '';
-      if (MediaRecorder.isTypeSupported('audio/webm')) {
-        mimeType = 'audio/webm';
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4';
+      // 按优先级尝试不同音频格式
+      const mimeTypes = [
+        'audio/webm',
+        'audio/mp4',
+        'audio/ogg;codecs=opus',
+        'audio/wav',
+        'audio/aac'
+      ];
+
+      for (const type of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          console.log(`使用支持的MIME类型: ${mimeType}`);
+          break;
+        }
       }
-      
-      console.log('使用MIME类型:', mimeType || '默认');
+
+      if (!mimeType) {
+        console.warn('未找到明确支持的MIME类型，将使用默认格式');
+      }
       
       try {
         // 使用简化的配置创建MediaRecorder
@@ -205,6 +225,9 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       // 开始录音 (使用定时触发数据收集)
       mediaRecorderRef.current.start(1000);
       console.log('录音已开始, 状态:', mediaRecorderRef.current.state);
+      
+      // 记录开始时间
+      setRecordingStartTime(Date.now());
       
       // 更新状态
       setIsRecording(true);
@@ -255,7 +278,7 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         }, 1000);
       }
     }
-  }, [getAccessToken, addMessage, setMessages, isRecording, isProcessing]);
+  }, [addMessage, setMessages, isRecording, isProcessing]);
 
   // 停止录音并处理音频
   const stopRecording = useCallback(async () => {
@@ -274,6 +297,10 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       // 捕获当前使用的媒体流以确保我们可以正确停止它
       const recorder = mediaRecorderRef.current;
       const currentStream = recorder.stream;
+      
+      // 计算录音时长
+      const recordingDuration = recordingStartTime ? (Date.now() - recordingStartTime) / 1000 : 0;
+      setRecordingStartTime(null);
       
       // 先手动请求最后一段数据
       try {
@@ -369,6 +396,19 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         return;
       }
       
+      // 创建音频URL供播放
+      const audioBlob2 = new Blob(audioChunksRef.current.slice(), { type: mimeType }); // 创建副本
+      const audioUrl = URL.createObjectURL(audioBlob2);
+      console.log('创建音频URL:', audioUrl);
+      
+      // 全局存储Blob以防止被垃圾回收
+      if (typeof window !== 'undefined') {
+        if (!window.audioBlobs) {
+          window.audioBlobs = {};
+        }
+        window.audioBlobs[audioUrl] = audioBlob2;
+      }
+      
       // 转换音频为base64
       try {
         const base64Audio = await new Promise<string | null>((resolve) => {
@@ -390,133 +430,180 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         
         console.log('音频已转换为base64，长度:', base64Audio.length);
         
-        // 添加用户消息，表示正在处理
-        addMessage('正在识别语音...', true);
+        // 创建新的语音消息
+        const userMessageId = uuidv4();
+        const userMessage: Message = {
+          id: userMessageId,
+          content: '[语音消息]',
+          text: '[语音消息]',
+          role: 'user',
+          isUser: true,
+          timestamp: Date.now(),
+          audioUrl: audioUrl,
+          audioDuration: recordingDuration || 1
+        };
         
-        // 获取访问令牌并准备API请求
-        const accessToken = await getAccessToken();
-        const deviceId = generateDeviceId();
+        // 在控制台打印语音消息信息（调试用）
+        console.log('创建语音消息:', {
+          id: userMessageId,
+          audioUrl,
+          audioDuration: recordingDuration || 1,
+          audioSize: audioBlob.size
+        });
         
-        // 确定音频格式，百度API需要正确的格式标识
-        let format = 'pcm'; // 默认使用pcm
+        // 更新消息列表，添加用户语音消息
+        setMessages((prev) => [...prev, userMessage]);
         
+        // 创建临时的AI消息（显示加载状态）
+        const tempBotId = uuidv4();
+        const tempBotMessage: Message = {
+          id: tempBotId,
+          content: '正在思考...',
+          role: 'assistant',
+          timestamp: Date.now(),
+          isLoading: true,
+        };
+        
+        // 更新消息列表，添加临时AI消息
+        setMessages((prev) => [...prev, tempBotMessage]);
+        
+        // 确定音频格式
+        let format = 'mp3'; // 默认格式
         if (mimeType.includes('webm')) {
-          format = 'pcm'; // 对于WebM文件使用pcm
+          format = 'webm';
         } else if (mimeType.includes('wav')) {
           format = 'wav';
-        } else if (mimeType.includes('mp3')) {
-          format = 'mp3';
         } else if (mimeType.includes('ogg')) {
-          format = 'pcm'; // 处理ogg格式
-        } else if (mimeType.includes('m4a') || mimeType.includes('mp4')) {
-          format = 'pcm'; // 处理m4a/mp4格式
+          format = 'ogg';
+        } else if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
+          format = 'mp4';
         }
         
-        console.log(`调用语音识别API, 检测到MIME类型: ${mimeType}, 使用格式参数: ${format}`);
+        // 准备发送到API的消息历史
+        const messagesToSend = messages
+          .filter(m => !m.isLoading) // 过滤掉加载中的消息
+          .map(m => ({
+            role: m.role || (m.isUser ? 'user' : 'assistant'),
+            content: m.content || m.text || ''
+          })) as BailianMessage[];
         
-        // 使用本地API路由发送请求
-        const response = await axios.post<BaiduASRResponse>(
-          `/api/baidu-asr`,
-          {
-            token: accessToken,
-            audio: base64Audio,
-            format: format,
-            len: base64Audio.length
+        // 添加带有音频的用户消息
+        messagesToSend.push({
+          role: 'user',
+          content: [
+            {
+              type: 'input_audio',
+              input_audio: {
+                data: `data:;base64,${base64Audio}`,
+                format: format
+              }
+            }
+          ]
+        } as BailianMessage);
+        
+        // 构建请求体
+        const payload = {
+          model: 'qwen-omni-turbo',
+          messages: messagesToSend,
+          stream: true,
+          stream_options: {
+            include_usage: true
+          },
+          modalities: ['text']
+        };
+        
+        console.log('API请求体:', JSON.stringify(payload));
+        
+        // 使用百炼API发送请求
+        const response = await fetch('/api/bailian-local/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API请求失败 (${response.status}): ${errorText}`);
+        }
+        
+        // 处理流式响应，先初始化变量
+        let fullResponse = '';
+        
+        // 处理流式响应
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        
+        if (reader) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const jsonStr = line.slice(6);
+                  if (jsonStr === '[DONE]') {
+                    console.log('流式响应完成');
+                    continue;
+                  }
+                  
+                  try {
+                    const jsonData = JSON.parse(jsonStr);
+                    
+                    // 检查是否有内容更新
+                    if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+                      const contentFragment = jsonData.choices[0].delta.content;
+                      fullResponse += contentFragment;
+                      
+                      // 更新AI回复消息
+                      setMessages(prev => 
+                        prev.map(m => 
+                          m.id === tempBotId 
+                            ? {
+                                ...m,
+                                content: fullResponse,
+                                text: fullResponse, // 兼容旧格式
+                                isLoading: true,
+                              }
+                            : m
+                        )
+                      );
+                    }
+                  } catch (e) {
+                    console.warn('解析流式响应数据失败:', e);
+                  }
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
           }
+        }
+        
+        // 完成加载，更新最终消息
+        setMessages(prev => 
+          prev.map(m => 
+            m.id === tempBotId 
+              ? {
+                  ...m,
+                  content: fullResponse || '抱歉，我无法理解您的语音。',
+                  text: fullResponse || '抱歉，我无法理解您的语音。', // 兼容旧格式
+                  isLoading: false,
+                }
+              : m
+          )
         );
         
-        console.log('百度语音识别结果:', JSON.stringify(response.data));
-        
-        // 处理识别结果
-        if (response.data.err_no === 0 && response.data.result && response.data.result.length > 0) {
-          const recognizedText = response.data.result[0];
-          console.log('语音识别成功:', recognizedText);
-          
-          // 更新用户消息
-          setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages];
-            const lastUserMessageIndex = updatedMessages.findIndex(
-              msg => msg.isUser && msg.text === '正在识别语音...'
-            );
-            
-            if (lastUserMessageIndex !== -1) {
-              updatedMessages[lastUserMessageIndex] = {
-                ...updatedMessages[lastUserMessageIndex],
-                text: recognizedText
-              };
-            }
-            
-            return updatedMessages;
-          });
-          
-          // 模拟AI回复
-          setTimeout(() => {
-            addMessage(`我已收到您的语音消息："${recognizedText}"。有什么我能帮您的吗？`, false);
-          }, 1000);
-        } else {
-          console.error('语音识别失败:', response.data.err_msg || '未知错误', '错误码:', response.data.err_no);
-          
-          // 更新用户消息，显示错误
-          setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages];
-            const lastUserMessageIndex = updatedMessages.findIndex(
-              msg => msg.isUser && msg.text === '正在识别语音...'
-            );
-            
-            if (lastUserMessageIndex !== -1) {
-              updatedMessages[lastUserMessageIndex] = {
-                ...updatedMessages[lastUserMessageIndex],
-                text: '语音识别失败，请重试'
-              };
-            }
-            
-            return updatedMessages;
-          });
-          
-          // 添加错误消息提示
-    setTimeout(() => {
-            let errorMessage = '语音识别失败';
-            
-            // 根据错误码提供更详细的错误信息
-            if (response.data.err_no === 3301) {
-              errorMessage = '无法识别您的语音，请确保说话清晰并靠近麦克风';
-            } else if (response.data.err_no === 3302) {
-              errorMessage = '语音识别服务鉴权失败，请联系管理员';
-            } else if (response.data.err_no === 3303) {
-              errorMessage = '语音内容无法识别，请尝试说些其他内容';
-            } else if (response.data.err_no === 3304) {
-              errorMessage = '音频格式不正确，请联系管理员';
-            } else if (response.data.err_no === 3305) {
-              errorMessage = '语音太长，无法处理，请缩短您的发言';
-            } else {
-              errorMessage = `语音识别失败 (错误码: ${response.data.err_no})，请重试`;
-            }
-            
-            addMessage(errorMessage, false);
-          }, 1000);
-        }
       } catch (error) {
         console.error('处理音频时出错:', error);
         setIsProcessing(false);
         
-        // 更新用户消息，显示错误
-        setMessages(prevMessages => {
-          const updatedMessages = [...prevMessages];
-          const lastUserMessageIndex = updatedMessages.findIndex(
-            msg => msg.isUser && msg.text === '正在识别语音...'
-          );
-          
-          if (lastUserMessageIndex !== -1) {
-            updatedMessages[lastUserMessageIndex] = {
-              ...updatedMessages[lastUserMessageIndex],
-              text: '语音处理失败，请重试'
-            };
-          }
-          
-          return updatedMessages;
-        });
-        
-        // 添加错误消息
+        addMessage('语音处理失败，请重试', true);
         addMessage(`语音处理失败: ${error instanceof Error ? error.message : String(error)}`, false);
       } finally {
         // 释放媒体流
@@ -541,7 +628,7 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       
       mediaRecorderRef.current = null;
     }
-  }, [addMessage, generateDeviceId, getAccessToken, setMessages]);
+  }, [addMessage, setMessages, recordingStartTime]);
 
   // 发送文本消息
   const sendTextMessage = async (text: string) => {
@@ -581,22 +668,24 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         .map(m => ({
           role: m.role || (m.isUser ? 'user' : 'assistant'),
           content: m.content || m.text || ''
-        }));
+        })) as BailianMessage[];
 
       console.log('准备发送的消息历史:', messagesToSend);
       
       // 构建请求体
       const payload = {
-        model: 'gemini-2.0-pro-exp-02-05',
+        model: 'qwen-omni-turbo',
         messages: messagesToSend,
-        temperature: 0.7,
-        max_tokens: 800,
+        stream: true,
+        stream_options: {
+          include_usage: true
+        }
       };
       
       console.log('API请求体:', JSON.stringify(payload));
       
-      // 使用本地 API 代理发送请求
-      const response = await fetch('/api/gemini-local/chat/completions', {
+      // 使用百炼 API 代理发送请求
+      const response = await fetch('/api/bailian-local/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -609,20 +698,85 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         throw new Error(`API请求失败 (${response.status}): ${errorText}`);
       }
       
-      const data = await response.json();
-      console.log('API响应:', data);
+      // 初始化一个空的响应内容
+      let fullContent = '';
       
-      // 从响应中提取AI回复
-      const botResponse = data.choices[0]?.message?.content || '抱歉，我无法生成回复。';
-      
-      // 更新AI消息 - 不再设置isLoading，但保留消息ID
+      // 设置初始的流式响应
       setMessages(prev => 
         prev.map(m => 
           m.id === tempBotId 
             ? {
                 ...m,
-                content: botResponse,
-                text: botResponse, // 同时更新旧格式属性，确保兼容性
+                content: '',
+                text: '', // 同时更新旧格式属性，确保兼容性
+                isLoading: true,
+              }
+            : m
+        )
+      );
+
+      // 处理流式响应
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const jsonStr = line.slice(6);
+                if (jsonStr === '[DONE]') {
+                  console.log('流式响应完成');
+                  continue;
+                }
+                
+                try {
+                  const jsonData = JSON.parse(jsonStr);
+                  
+                  // 检查是否有内容更新
+                  if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+                    const contentFragment = jsonData.choices[0].delta.content;
+                    fullContent += contentFragment;
+                    
+                    // 更新消息内容
+                    setMessages(prev => 
+                      prev.map(m => 
+                        m.id === tempBotId 
+                          ? {
+                              ...m,
+                              content: fullContent,
+                              text: fullContent, // 同时更新旧格式属性，确保兼容性
+                              isLoading: true,
+                            }
+                          : m
+                      )
+                    );
+                  }
+                } catch (e) {
+                  console.warn('解析流式响应数据失败:', e);
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+      
+      // 完成加载，更新最终消息
+      setMessages(prev => 
+        prev.map(m => 
+          m.id === tempBotId 
+            ? {
+                ...m,
+                content: fullContent || '抱歉，我无法生成回复。',
+                text: fullContent || '抱歉，我无法生成回复。', // 同时更新旧格式属性，确保兼容性
                 isLoading: false,
               }
             : m
@@ -665,6 +819,7 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       setInputText,
       showPermissionGuide,
       closePermissionGuide,
+      playAudio
     }),
     [
       messages,
@@ -679,8 +834,32 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       setInputText,
       showPermissionGuide,
       closePermissionGuide,
+      playAudio
     ]
   );
+
+  // 在组件卸载时清理所有Blob URL
+  useEffect(() => {
+    return () => {
+      // 清理当前播放的音频
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+      }
+      
+      // 清理所有存储的Blob
+      if (window.audioBlobs) {
+        Object.keys(window.audioBlobs).forEach(url => {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.warn('释放URL失败:', url, e);
+          }
+        });
+        window.audioBlobs = {};
+      }
+    };
+  }, [currentAudio]);
 
   return (
     <VoiceChatContext.Provider value={contextValue}>

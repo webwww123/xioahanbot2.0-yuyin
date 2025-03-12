@@ -4,18 +4,27 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function ApiDebug() {
-  const [apiUrl, setApiUrl] = useState('https://pink-chat-api.deno.dev/v1')
+  const [apiUrl, setApiUrl] = useState('https://dashscope.aliyuncs.com/compatible-mode/v1')
   const [useLocalProxy, setUseLocalProxy] = useState(true)
-  const [apiKey, setApiKey] = useState('AIzaSyBIDvwIlfUzhQPQQVwPWlAAVv75-E_oxuM')
+  const [apiKey, setApiKey] = useState('sk-68cc7ab559d4429889c6eda358b05763')
   const [endpoint, setEndpoint] = useState('/chat/completions')
   const [method, setMethod] = useState('POST')
   const [requestBody, setRequestBody] = useState(JSON.stringify({
-    model: 'gemini-2.0-pro-exp-02-05',
+    model: 'qwen-omni-turbo',
     messages: [
-      { role: 'user', content: '你好，这是一条测试消息，请用中文回复' }
+      {
+        role: 'system',
+        content: 'You are a helpful assistant.'
+      },
+      {
+        role: 'user',
+        content: '你好，这是一条测试消息，请用中文回复'
+      }
     ],
-    temperature: 0.7,
-    max_tokens: 800
+    stream: true,
+    stream_options: {
+      include_usage: true
+    }
   }, null, 2))
   
   const [loading, setLoading] = useState(false)
@@ -31,6 +40,8 @@ export default function ApiDebug() {
   
   const [logs, setLogs] = useState<string[]>([])
   const logsEndRef = useRef<HTMLDivElement>(null)
+  
+  const [audioFile, setAudioFile] = useState<File | null>(null)
   
   // 记录日志
   const log = (message: string) => {
@@ -61,7 +72,7 @@ export default function ApiDebug() {
     
     // 确定实际使用的 URL
     const effectiveUrl = useLocalProxy 
-      ? `/api/gemini-local${endpoint}` 
+      ? `/api/bailian-local${endpoint}` 
       : `${apiUrl}${endpoint}`
     
     log(`[${currentTime}] 发送${method}请求到: ${effectiveUrl}`)
@@ -72,15 +83,12 @@ export default function ApiDebug() {
         method,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
         },
       }
       
-      // 只有在不使用本地代理时才需要添加 Authorization 头
+      // 只有在不使用本地代理时才需要添加额外的CORS配置
       if (!useLocalProxy) {
-        requestOptions.headers = {
-          ...requestOptions.headers,
-          'Authorization': 'Bearer AIzaSyBIDvwIlfUzhQPQQVwPWlAAVv75-E_oxuM',
-        }
         requestOptions.mode = 'cors'
         requestOptions.credentials = 'omit'
       }
@@ -107,11 +115,45 @@ export default function ApiDebug() {
       if (!response.ok) {
         throw new Error(`请求失败，状态: ${response.status} ${response.statusText}`)
       }
-      
-      // 解析响应
-      const data = await response.json()
-      setResponseData(JSON.stringify(data, null, 2))
-      log(`[${currentTime}] 请求成功，已接收响应`)
+
+      // 如果是流式响应
+      const parsedBody = JSON.parse(requestBody)
+      if (parsedBody.stream) {
+        setResponseData('等待流式响应...\n')
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        
+        while (true) {
+          const { done, value } = await reader!.read()
+          if (done) break
+          
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const jsonStr = line.slice(6)
+              if (jsonStr === '[DONE]') {
+                log(`[${currentTime}] 流式响应完成`)
+                continue
+              }
+              try {
+                const jsonData = JSON.parse(jsonStr)
+                setResponseData(prev => prev + JSON.stringify(jsonData, null, 2) + '\n')
+              } catch (e) {
+                console.warn('解析响应数据失败:', e)
+              }
+            }
+          }
+        }
+        
+        log(`[${currentTime}] 请求成功，已接收所有流式响应`)
+      } else {
+        // 非流式响应
+        const data = await response.json()
+        setResponseData(JSON.stringify(data, null, 2))
+        log(`[${currentTime}] 请求成功，已接收响应`)
+      }
     } catch (error) {
       log(`[${currentTime}] 错误: ${error instanceof Error ? error.message : String(error)}`)
       
@@ -140,15 +182,104 @@ export default function ApiDebug() {
     if (!confirm('确定要重置所有表单吗？')) return
     
     setRequestBody(JSON.stringify({
-      model: 'gemini-2.0-pro-exp-02-05',
+      model: 'qwen-omni-turbo',
       messages: [
-        { role: 'user', content: '你好，这是一条测试消息，请用中文回复' }
+        {
+          role: 'system',
+          content: 'You are a helpful assistant.'
+        },
+        {
+          role: 'user',
+          content: '你好，这是一条测试消息，请用中文回复'
+        }
       ],
-      temperature: 0.7,
-      max_tokens: 800
+      stream: true,
+      stream_options: {
+        include_usage: true
+      }
     }, null, 2))
     
     setLogs([])
+  }
+  
+  // 处理音频文件选择
+  const handleAudioFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    setAudioFile(file)
+    log(`已选择音频文件: ${file.name}`)
+  }
+  
+  // 添加音频测试
+  const addAudioTest = async () => {
+    if (!audioFile) {
+      log('请先选择音频文件')
+      return
+    }
+    
+    try {
+      // 读取音频文件并转换为 Base64
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const base64Audio = e.target?.result?.toString().split(',')[1]
+        if (!base64Audio) {
+          log('音频文件读取失败')
+          return
+        }
+        
+        // 获取文件的MIME类型和扩展名
+        let mimeType = audioFile.type
+        let format = 'mp3' // 默认格式
+        
+        // 根据文件扩展名推测格式
+        const extension = audioFile.name.split('.').pop()?.toLowerCase()
+        if (extension) {
+          format = extension
+        }
+        
+        log(`音频文件尺寸: ${Math.round(base64Audio.length * 0.75 / 1024)} KB, 格式: ${format}`)
+        
+        // 更新请求体 - 使用正确的格式
+        const newBody = {
+          model: 'qwen-omni-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: [{ type: 'text', text: 'You are a helpful assistant.' }]
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'input_audio',
+                  input_audio: { 
+                    data: `data:;base64,${base64Audio}`,
+                    format: format
+                  }
+                },
+                {
+                  type: 'text',
+                  text: '这段音频说了什么？请用中文回复'
+                }
+              ]
+            }
+          ],
+          stream: true,
+          stream_options: {
+            include_usage: true
+          },
+          modalities: ['text']
+        }
+        
+        setRequestBody(JSON.stringify(newBody, null, 2))
+        log('已更新请求体，包含音频数据')
+      }
+      
+      reader.readAsDataURL(audioFile)
+    } catch (error) {
+      log(`处理音频文件时出错: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
   
   return (
@@ -240,17 +371,17 @@ export default function ApiDebug() {
             
             <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => switchModel('gemini-2.0-pro-exp-02-05')}
+                onClick={() => switchModel('qwen-omni-turbo')}
                 className="px-3 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600"
               >
-                gemini-2.0-pro
+                qwen-omni-turbo
               </button>
               
               <button
-                onClick={() => switchModel('gemini-1.5-pro-latest')}
+                onClick={() => switchModel('qwen-omni-plus')}
                 className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
               >
-                gemini-1.5-pro
+                qwen-omni-plus
               </button>
               
               <button
@@ -259,6 +390,30 @@ export default function ApiDebug() {
               >
                 获取模型列表
               </button>
+            </div>
+            
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold mb-2">音频识别测试</h3>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioFileChange}
+                  className="text-sm"
+                />
+                <button
+                  onClick={addAudioTest}
+                  disabled={!audioFile}
+                  className="px-3 py-1 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 disabled:opacity-50"
+                >
+                  添加音频测试
+                </button>
+              </div>
+              {audioFile && (
+                <div className="mt-2 text-xs text-gray-500">
+                  已选择: {audioFile.name}
+                </div>
+              )}
             </div>
           </div>
         </div>
