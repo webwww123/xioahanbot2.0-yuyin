@@ -29,7 +29,7 @@ const VoiceMessage: React.FC<{ url: string; duration: number }> = ({ url, durati
   
   return (
     <div 
-      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mt-1"
       onClick={handlePlay}
     >
       <FaVolumeUp className={classNames(
@@ -102,9 +102,12 @@ export function MessageItem({ message }: MessageItemProps) {
         </div>
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-[80%]" />
+            <div className="space-y-3 py-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
             </div>
           ) : (
             <div className="prose dark:prose-invert max-w-none text-sm sm:text-base overflow-hidden break-words">
