@@ -857,7 +857,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({
         animate={{ opacity: textBoxExpanded ? 0 : 1 }}
         transition={{ duration: 0.5 }}
       >
-        {isRecording ? '正在录音...' : isProcessing ? '处理中...' : '大黄出品'}
+        {isRecording ? '' : isProcessing ? '' : ''}
       </motion.div>
     </div>
   )

@@ -63,7 +63,7 @@ export function ChatInput() {
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isSubmitting || isRecording || isProcessing}
-              placeholder={isRecording ? "正在录音中..." : isProcessing ? "处理中..." : "输入消息或按麦克风键语音聊天..."}
+              placeholder={isRecording ? "" : isProcessing ? "" : ""}
               className="flex-1 max-h-[150px] py-2 px-3 resize-none bg-transparent border-0 focus:ring-0 focus:outline-none dark:text-gray-100"
               style={{ height: '40px' }}
             />
@@ -80,15 +80,6 @@ export function ChatInput() {
               <Send size={18} className="opacity-90" />
             </button>
           </div>
-        </div>
-        
-        {/* 底部说明 */}
-        <div className="mt-2 text-xs text-center text-gray-500 dark:text-gray-400">
-          {isRecording 
-            ? "点击麦克风按钮停止录音" 
-            : isProcessing 
-            ? "语音处理中，请稍候..." 
-            : "点击麦克风图标开始录音，消息以语音条形式保存"}
         </div>
       </div>
     </div>

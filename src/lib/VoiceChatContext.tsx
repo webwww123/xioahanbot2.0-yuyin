@@ -153,9 +153,6 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
     if (isRecording || isProcessing) return;
     
     try {
-      // 添加系统提示
-      addMessage('正在准备录音...', false);
-      
       console.log('请求麦克风权限...');
       
       // 简化音频参数，减少潜在问题
@@ -240,19 +237,11 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         );
         
         if (lastSystemMessageIndex !== -1) {
-          updatedMessages[lastSystemMessageIndex] = {
-            ...updatedMessages[lastSystemMessageIndex],
-            text: '正在录音，请说出您想要表达的内容...'
-          };
+          // 删除提示消息
+          updatedMessages.splice(lastSystemMessageIndex, 1);
           return updatedMessages;
-        } else {
-          return [...prevMessages, {
-            id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            text: '正在录音，请说出您想要表达的内容...',
-            isUser: false,
-            timestamp: Date.now(),
-          }];
         }
+        return prevMessages;
       });
     } catch (error) {
       console.error('开始录音失败:', error);
